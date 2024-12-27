@@ -6,7 +6,7 @@
 #include "../include/db.h"
 
 // Hàm tải lên file
-int upload_file(DBConnection *db, int sender_id, const char *receiver_username, const char *file_name, const char *file_type, const char *file_path, int is_group);
+int upload_file(DBConnection *db, int sender_id, const char *receiver_username, const char *file_name, const char *file_type, const char *file_content, int file_size, int is_group);
 
 // Hàm tải xuống file
 int download_file(DBConnection *db, int sender_id, const char *file_name, char *file_path, size_t path_size);

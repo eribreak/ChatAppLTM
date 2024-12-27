@@ -8,7 +8,8 @@
 
 #define BUFFER_SIZE 1024
 
-int create_group(DBConnection *db, const char *group_name, int creator_id) {
+int create_group(DBConnection *db, const char *group_name, int creator_id)
+{
     char query[BUFFER_SIZE];
     int group_id = -1;
 
@@ -16,18 +17,21 @@ int create_group(DBConnection *db, const char *group_name, int creator_id) {
     snprintf(query, sizeof(query),
              "INSERT INTO chat_groups (group_name, creator_id) VALUES ('%s', %d)",
              group_name, creator_id);
-    if (execute_query(db, query) == NULL) {
+    if (execute_query(db, query) == NULL)
+    {
         return -1;
     }
 
     // Lấy ID của nhóm vừa tạo
     snprintf(query, sizeof(query), "SELECT id FROM chat_groups WHERE group_name='%s'", group_name);
     MYSQL_RES *res = execute_query(db, query);
-    if (res == NULL) {
+    if (res == NULL)
+    {
         return -1;
     }
     MYSQL_ROW row = mysql_fetch_row(res);
-    if (row == NULL) {
+    if (row == NULL)
+    {
         mysql_free_result(res);
         return -1;
     }
@@ -38,25 +42,29 @@ int create_group(DBConnection *db, const char *group_name, int creator_id) {
     snprintf(query, sizeof(query),
              "INSERT INTO group_members (group_id, user_id, role) VALUES (%d, %d, 'admin')",
              group_id, creator_id);
-    if (execute_query(db, query) == NULL) {
+    if (execute_query(db, query) == NULL)
+    {
         return -1;
     }
 
     return group_id;
 }
 
-int join_group(DBConnection *db, const char *group_name, int user_id) {
+int join_group(DBConnection *db, const char *group_name, int user_id)
+{
     char query[BUFFER_SIZE];
     int group_id = -1;
 
     // Lấy group_id từ tên nhóm
     snprintf(query, sizeof(query), "SELECT id FROM chat_groups WHERE group_name='%s'", group_name);
     MYSQL_RES *res = execute_query(db, query);
-    if (res == NULL) {
+    if (res == NULL)
+    {
         return -1;
     }
     MYSQL_ROW row = mysql_fetch_row(res);
-    if (row == NULL) {
+    if (row == NULL)
+    {
         mysql_free_result(res);
         return -1; // Nhóm không tồn tại
     }
@@ -68,11 +76,13 @@ int join_group(DBConnection *db, const char *group_name, int user_id) {
              "SELECT 1 FROM group_members WHERE group_id=%d AND user_id=%d",
              group_id, user_id);
     res = execute_query(db, query);
-    if (res == NULL) {
+    if (res == NULL)
+    {
         return -1;
     }
     row = mysql_fetch_row(res);
-    if (row != NULL) {
+    if (row != NULL)
+    {
         mysql_free_result(res);
         return -2; // Đã là thành viên
     }
@@ -82,43 +92,103 @@ int join_group(DBConnection *db, const char *group_name, int user_id) {
     snprintf(query, sizeof(query),
              "INSERT INTO group_members (group_id, user_id, role) VALUES (%d, %d, 'member')",
              group_id, user_id);
-    if (execute_query(db, query) == NULL) {
+    if (execute_query(db, query) == NULL)
+    {
         return -1;
     }
 
     return group_id;
 }
 
-int leave_group(DBConnection *db, const char *group_name, int user_id) {
+int leave_group(DBConnection *db, const char *group_name, int user_id)
+{
     char query[BUFFER_SIZE];
     int group_id = -1;
+    int is_admin = 0;
 
     // Lấy group_id từ tên nhóm
     snprintf(query, sizeof(query), "SELECT id FROM chat_groups WHERE group_name='%s'", group_name);
     MYSQL_RES *res = execute_query(db, query);
-    if (res == NULL) {
+    if (res == NULL)
+    {
         return -1;
     }
     MYSQL_ROW row = mysql_fetch_row(res);
-    if (row == NULL) {
+    if (row == NULL)
+    {
         mysql_free_result(res);
         return -1; // Nhóm không tồn tại
     }
     group_id = atoi(row[0]);
     mysql_free_result(res);
 
+    // Kiểm tra nếu người dùng là admin
+    snprintf(query, sizeof(query),
+             "SELECT role FROM group_members WHERE group_id=%d AND user_id=%d",
+             group_id, user_id);
+    res = execute_query(db, query);
+    if (res == NULL)
+    {
+        return -1;
+    }
+    row = mysql_fetch_row(res);
+    if (row == NULL)
+    {
+        mysql_free_result(res);
+        return -1; // Người dùng không phải là thành viên của nhóm
+    }
+    is_admin = strcmp(row[0], "admin") == 0;
+    mysql_free_result(res);
+
+    // Nếu là admin, chuyển quyền admin cho user tham gia gần nhất
+    if (is_admin)
+    {
+        snprintf(query, sizeof(query),
+                 "SELECT user_id FROM group_members "
+                 "WHERE group_id=%d AND user_id != %d "
+                 "ORDER BY joined_at ASC LIMIT 1",
+                 group_id, user_id);
+        res = execute_query(db, query);
+        if (res == NULL)
+        {
+            return -1;
+        }
+        row = mysql_fetch_row(res);
+        if (row != NULL)
+        {
+            int new_admin_id = atoi(row[0]);
+            mysql_free_result(res);
+
+            // Cập nhật role của user tham gia gần nhất thành admin
+            snprintf(query, sizeof(query),
+                     "UPDATE group_members SET role='admin' WHERE group_id=%d AND user_id=%d",
+                     group_id, new_admin_id);
+            if (execute_query(db, query) == NULL)
+            {
+                return -1;
+            }
+        }
+        else
+        {
+            // Không còn thành viên nào khác trong nhóm
+            mysql_free_result(res);
+        }
+    }
+
     // Xóa người dùng khỏi nhóm
     snprintf(query, sizeof(query),
              "DELETE FROM group_members WHERE group_id=%d AND user_id=%d",
              group_id, user_id);
-    if (execute_query(db, query) == NULL) {
+    if (execute_query(db, query) == NULL)
+    {
         return -1;
     }
 
     return 0; // Thành công
 }
 
-int add_member_to_group(DBConnection *db, const char *group_name, const char *member_username) {
+int add_member_to_group(DBConnection *db, const char *group_name, const char *member_username)
+{
     char query[BUFFER_SIZE];
     int group_id = -1;
     int member_id = -1;
@@ -126,11 +196,13 @@ int add_member_to_group(DBConnection *db, const char *group_name, const char *me
     // Lấy group_id từ tên nhóm
     snprintf(query, sizeof(query), "SELECT id FROM chat_groups WHERE group_name='%s'", group_name);
     MYSQL_RES *res = execute_query(db, query);
-    if (res == NULL) {
+    if (res == NULL)
+    {
         return -1;
     }
     MYSQL_ROW row = mysql_fetch_row(res);
-    if (row == NULL) {
+    if (row == NULL)
+    {
         mysql_free_result(res);
         return -1; // Nhóm không tồn tại
     }
@@ -140,11 +212,13 @@ int add_member_to_group(DBConnection *db, const char *group_name, const char *me
     // Lấy user_id của thành viên cần thêm
     snprintf(query, sizeof(query), "SELECT id FROM users WHERE username='%s'", member_username);
     res = execute_query(db, query);
-    if (res == NULL) {
+    if (res == NULL)
+    {
         return -1;
     }
     row = mysql_fetch_row(res);
-    if (row == NULL) {
+    if (row == NULL)
+    {
         mysql_free_result(res);
         return -1; // Người dùng không tồn tại
     }
@@ -156,11 +230,13 @@ int add_member_to_group(DBConnection *db, const char *group_name, const char *me
              "SELECT 1 FROM group_members WHERE group_id=%d AND user_id=%d",
              group_id, member_id);
     res = execute_query(db, query);
-    if (res == NULL) {
+    if (res == NULL)
+    {
         return -1;
     }
     row = mysql_fetch_row(res);
-    if (row != NULL) {
+    if (row != NULL)
+    {
         mysql_free_result(res);
         return -2; // Đã là thành viên
     }
@@ -170,14 +246,16 @@ int add_member_to_group(DBConnection *db, const char *group_name, const char *me
     snprintf(query, sizeof(query),
              "INSERT INTO group_members (group_id, user_id, role) VALUES (%d, %d, 'member')",
              group_id, member_id);
-    if (execute_query(db, query) == NULL) {
+    if (execute_query(db, query) == NULL)
+    {
         return -1;
     }
 
     return 0; // Thành công
 }
 
-int remove_member_from_group(DBConnection *db, const char *group_name, const char *member_username) {
+int remove_member_from_group(DBConnection *db, const char *group_name, const char *member_username)
+{
     char query[BUFFER_SIZE];
     int group_id = -1;
     int member_id = -1;
@@ -185,11 +263,13 @@ int remove_member_from_group(DBConnection *db, const char *group_name, const cha
     // Lấy group_id từ tên nhóm
     snprintf(query, sizeof(query), "SELECT id FROM chat_groups WHERE group_name='%s'", group_name);
     MYSQL_RES *res = execute_query(db, query);
-    if (res == NULL) {
+    if (res == NULL)
+    {
         return -1;
     }
     MYSQL_ROW row = mysql_fetch_row(res);
-    if (row == NULL) {
+    if (row == NULL)
+    {
         mysql_free_result(res);
         return -1; // Nhóm không tồn tại
     }
@@ -199,11 +279,13 @@ int remove_member_from_group(DBConnection *db, const char *group_name, const cha
     // Lấy user_id của thành viên cần xóa
     snprintf(query, sizeof(query), "SELECT id FROM users WHERE username='%s'", member_username);
     res = execute_query(db, query);
-    if (res == NULL) {
+    if (res == NULL)
+    {
         return -1;
     }
     row = mysql_fetch_row(res);
-    if (row == NULL) {
+    if (row == NULL)
+    {
         mysql_free_result(res);
         return -1; // Người dùng không tồn tại
     }
@@ -214,73 +296,82 @@ int remove_member_from_group(DBConnection *db, const char *group_name, const cha
     snprintf(query, sizeof(query),
              "DELETE FROM group_members WHERE group_id=%d AND user_id=%d",
              group_id, member_id);
-    if (execute_query(db, query) == NULL) {
+    if (execute_query(db, query) == NULL)
+    {
         return -1;
     }
 
     return 0; // Thành công
 }
 
-int list_user_groups(DBConnection *db, int user_id, char *result, size_t result_size) {
+int list_user_groups(DBConnection *db, int user_id, char *groups, size_t group_size)
+{
     char query[BUFFER_SIZE];
     snprintf(query, sizeof(query),
-             "SELECT g.group_name FROM chat_groups g "
-             "JOIN group_members gm ON g.id = gm.group_id "
-             "WHERE gm.user_id = %d", user_id);
+             "SELECT group_name FROM chat_groups "
+             "JOIN group_members ON chat_groups.id = group_members.group_id "
+             "WHERE group_members.user_id = 1");
+
     MYSQL_RES *res = execute_query(db, query);
-    if (res == NULL) {
-        strncpy(result, "Không thể lấy danh sách nhóm.\n", result_size);
-        return -1;
+    if (res == NULL)
+    {
+        return -1; // Lỗi cơ sở dữ liệu
     }
 
     MYSQL_ROW row;
-    size_t offset = 0;
-    while ((row = mysql_fetch_row(res)) != NULL) {
-        offset += snprintf(result + offset, result_size - offset, "%s\n", row[0]);
-        if (offset >= result_size) break;
+    groups[0] = '\0'; // Khởi tạo chuỗi rỗng
+    while ((row = mysql_fetch_row(res)) != NULL)
+    {
+        // Nối tên nhóm vào chuỗi `groups`
+        strncat(groups, row[0], group_size - strlen(groups) - 1);
+        strncat(groups, ":", group_size - strlen(groups) - 1);
     }
     mysql_free_result(res);
 
-    if (offset == 0) {
-        strncpy(result, "Bạn chưa tham gia nhóm nào.\n", result_size);
-    }
-
-    return 0;
+    return 0; // Thành công
 }
 
-int list_all_users(DBConnection *db, char *result, size_t result_size) {
+int list_all_users(DBConnection *db, char *result, size_t result_size)
+{
     char query[BUFFER_SIZE];
     snprintf(query, sizeof(query), "SELECT username FROM users");
     MYSQL_RES *res = execute_query(db, query);
-    if (res == NULL) {
+    if (res == NULL)
+    {
         strncpy(result, "Không thể lấy danh sách người dùng.\n", result_size);
         return -1;
     }
 
     MYSQL_ROW row;
     size_t offset = 0;
-    while ((row = mysql_fetch_row(res)) != NULL) {
-        offset += snprintf(result + offset, result_size - offset, "%s\n", row[0]);
-        if (offset >= result_size) break;
+    while ((row = mysql_fetch_row(res)) != NULL)
+    {
+        offset += snprintf(result + offset, result_size - offset, "%s:", row[0]);
+        if (offset >= result_size)
+            break;
     }
     mysql_free_result(res);
 
-    if (offset == 0) {
+    if (offset == 0)
+    {
         strncpy(result, "Không có người dùng nào.\n", result_size);
     }
 
     return 0;
 }
 
-int send_group_message(DBConnection *db, int sender_id, const char *group_name, const char *message) {
+int send_group_message(DBConnection *db, int sender_id, const char *group_name, const char *message)
+{
     char query[BUFFER_SIZE];
     snprintf(query, sizeof(query), "SELECT id FROM chat_groups WHERE group_name='%s'", group_name);
     MYSQL_RES *res = execute_query(db, query);
-    if (res == NULL) {
+    if (res == NULL)
+    {
         return -1;
     }
     MYSQL_ROW row = mysql_fetch_row(res);
-    if (row == NULL) {
+    if (row == NULL)
+    {
         mysql_free_result(res);
         return -1; // Nhóm không tồn tại
     }
@@ -292,11 +383,13 @@ int send_group_message(DBConnection *db, int sender_id, const char *group_name, 
              "SELECT 1 FROM group_members WHERE group_id=%d AND user_id=%d",
              group_id, sender_id);
     res = execute_query(db, query);
-    if (res == NULL) {
+    if (res == NULL)
+    {
         return -1;
     }
     row = mysql_fetch_row(res);
-    if (row == NULL) {
+    if (row == NULL)
+    {
         mysql_free_result(res);
         return -1; // Người gửi không phải thành viên
     }
@@ -306,7 +399,8 @@ int send_group_message(DBConnection *db, int sender_id, const char *group_name, 
     snprintf(query, sizeof(query),
              "INSERT INTO messages (sender_id, group_id, message) VALUES (%d, %d, '%s')",
              sender_id, group_id, message);
-    if (execute_query(db, query) == NULL) {
+    if (execute_query(db, query) == NULL)
+    {
         return -1;
     }
 
@@ -319,7 +413,8 @@ int send_group_message(DBConnection *db, int sender_id, const char *group_name, 
     return 0;
 }
 
-int list_group_messages(DBConnection *db, const char *group_name, char *result, size_t result_size) {
+int list_group_messages(DBConnection *db, const char *group_name, char *result, size_t result_size)
+{
     char query[BUFFER_SIZE];
     snprintf(query, sizeof(query),
              "SELECT u.username, m.message, m.created_at FROM messages m "
@@ -328,20 +423,24 @@ int list_group_messages(DBConnection *db, const char *group_name, char *result, 
              "WHERE g.group_name = '%s' ORDER BY m.created_at ASC",
              group_name);
     MYSQL_RES *res = execute_query(db, query);
-    if (res == NULL) {
+    if (res == NULL)
+    {
         strncpy(result, "Không thể lấy tin nhắn nhóm.\n", result_size);
         return -1;
     }
 
     MYSQL_ROW row;
     size_t offset = 0;
-    while ((row = mysql_fetch_row(res)) != NULL) {
+    while ((row = mysql_fetch_row(res)) != NULL)
+    {
         offset += snprintf(result + offset, result_size - offset, "[%s] %s: %s\n", row[2], row[0], row[1]);
-        if (offset >= result_size) break;
+        if (offset >= result_size)
+            break;
     }
     mysql_free_result(res);
 
-    if (offset == 0) {
+    if (offset == 0)
+    {
         strncpy(result, "Không có tin nhắn trong nhóm này.\n", result_size);
     }
 
