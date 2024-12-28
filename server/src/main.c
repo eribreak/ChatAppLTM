@@ -19,13 +19,6 @@
 #define MAX_CLIENTS 100
 #define PORT 8083
 
-typedef struct
-{
-    int sock;
-    int id;
-    char username[50];
-} Client;
-
 Client *clients[MAX_CLIENTS] = {NULL};
 DBConnection db;
 int current_index;
@@ -157,6 +150,15 @@ void *handle_client(int client_index)
         }
         printf("%s %s\n", recipient, message);
         handle_private_message(&db, client->id, recipient, message, client->sock);
+        for (int i = 0; i < MAX_CLIENTS; i++)
+        {
+            if (clients[i] != NULL && strcmp(recipient, clients[i]->username) == 0)
+            {
+                char response[BUFFER_SIZE];
+                snprintf(response, sizeof(response), "MESSAGE: %s : %s", client->username, message);
+                send_response(clients[i]->sock, response);
+            }
+        }
     }
     else if (strncmp(buffer, "CREATE_GROUP", 12) == 0)
     {
@@ -265,7 +267,7 @@ void *handle_client(int client_index)
         {
             send_response(client->sock, "GroupMessageFailed: Invalid format.\n");
         }
-        if (send_group_message(&db, client->id, group_name, message) == 0)
+        if (send_group_message(&db, client, group_name, message, clients) == 0)
         {
             send_response(client->sock, "GroupMessageSent\n");
         }
@@ -273,6 +275,13 @@ void *handle_client(int client_index)
         {
             send_response(client->sock, "GroupMessageFailed\n");
         }
+    }
+    else if (strncmp(buffer, "HISTORY", 7) == 0)
+    {
+        char recipient[50];
+        sscanf(buffer + 8, "%s", recipient);
+        printf("%s\n", recipient);
+        handle_get_messages(&db, client->username, recipient, client->sock);
     }
     else if (strncmp(buffer, "LIST_GROUPS", 11) == 0)
     {

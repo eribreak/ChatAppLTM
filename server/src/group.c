@@ -7,7 +7,7 @@
 #include <string.h>
 
 #define BUFFER_SIZE 1024
-
+#define MAX_CLIENTS 100
 int create_group(DBConnection *db, const char *group_name, int creator_id)
 {
     char query[BUFFER_SIZE];
@@ -360,8 +360,9 @@ int list_all_users(DBConnection *db, char *result, size_t result_size)
     return 0;
 }
 
-int send_group_message(DBConnection *db, int sender_id, const char *group_name, const char *message)
+int send_group_message(DBConnection *db, Client *client, const char *group_name, const char *message, Client *clients[])
 {
+    int sender_id = client->id;
     char query[BUFFER_SIZE];
     snprintf(query, sizeof(query), "SELECT id FROM chat_groups WHERE group_name='%s'", group_name);
     MYSQL_RES *res = execute_query(db, query);
@@ -406,9 +407,33 @@ int send_group_message(DBConnection *db, int sender_id, const char *group_name, 
 
     // Gửi tin nhắn tới tất cả thành viên trong nhóm (ngoại trừ người gửi)
     // Bạn cần triển khai danh sách các client đang kết nối để tìm và gửi tin nhắn
+    // Gửi tin nhắn tới tất cả thành viên trong nhóm (ngoại trừ người gửi)
+    snprintf(query, sizeof(query),
+             "SELECT user_id FROM group_members WHERE group_id=%d AND user_id!=%d",
+             group_id, sender_id);
+    res = execute_query(db, query);
+    if (res == NULL)
+    {
+        return -1;
+    }
 
-    // Ví dụ:
-    // send_message_to_user(recipient_sock, message);
+    while ((row = mysql_fetch_row(res)) != NULL)
+    {
+        int member_id = atoi(row[0]);
+
+        // Kiểm tra nếu thành viên đang trực tuyến
+        for (int i = 0; i < MAX_CLIENTS; i++)
+        {
+            if (clients[i] != NULL && clients[i]->id == member_id)
+            {
+                char response[BUFFER_SIZE];
+                snprintf(response, sizeof(response), "MESSAGE %s: %s", client->username, message);
+                send_response(clients[i]->sock, response);
+            }
+        }
+    }
+
+    mysql_free_result(res);
 
     return 0;
 }

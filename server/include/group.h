@@ -5,6 +5,13 @@
 
 #include "../include/db.h"
 
+typedef struct
+{
+    int sock;
+    int id;
+    char username[50];
+} Client;
+
 // Hàm tạo nhóm mới
 int create_group(DBConnection *db, const char *group_name, int creator_id);
 
@@ -27,7 +34,7 @@ int list_user_groups(DBConnection *db, int user_id, char *result, size_t result_
 int list_all_users(DBConnection *db, char *result, size_t result_size);
 
 // Hàm gửi tin nhắn nhóm
-int send_group_message(DBConnection *db, int sender_id, const char *group_name, const char *message);
+int send_group_message(DBConnection *db, Client *client, const char *group_name, const char *message, Client *clients[]);
 
 // Hàm liệt kê tin nhắn nhóm
 int list_group_messages(DBConnection *db, const char *group_name, char *result, size_t result_size);

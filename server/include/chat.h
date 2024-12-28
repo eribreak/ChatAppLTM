@@ -11,4 +11,6 @@ void handle_private_message(DBConnection *db, int sender_id, const char *recipie
 // Hàm gửi tin nhắn tới người nhận
 void send_message_to_user(int recipient_sock, const char *message);
 
+void handle_get_messages(DBConnection *conn, char *username, char *recipient, int client_socket);
+
 #endif // SERVER_CHAT_H
