@@ -540,6 +540,34 @@ int main()
             // Loại bỏ ký tự dòng mới nếu có
             response[strcspn(response, "\n")] = 0;
             printf("Server: %s\n", response);
+
+            if (strncmp(response, "DownloadSuccess", 15) == 0)
+            {
+                char save_path[BUFFER_SIZE];
+                char file_content[BUFFER_SIZE];
+
+                // Tìm vị trí dấu cách sau "DownloadSuccess "
+                const char *start = response + 16;    // Bỏ qua "DownloadSuccess "
+                char *space_pos = strchr(start, ' '); // Tìm dấu cách
+
+                if (space_pos)
+                {
+                    // Tách save_path và file_content
+                    size_t path_len = space_pos - start; // Độ dài của save_path
+                    strncpy(save_path, start, path_len); // Sao chép save_path
+                    save_path[path_len] = '\0';          // Kết thúc chuỗi
+
+                    strcpy(file_content, space_pos + 1); // Sao chép phần còn lại vào file_content
+
+                    // Lưu file
+                    printf("Đang lưu file...\n");
+                    save_file(file_content, save_path);
+                }
+                else
+                {
+                    printf("Phản hồi từ server không đúng định dạng.\n");
+                }
+            }
         }
         else
         {

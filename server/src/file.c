@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <sys/socket.h>
 
 #define BUFFER_SIZE 1024
 
@@ -159,9 +160,11 @@ int upload_file(DBConnection *db, int sender_id, const char *receiver_username, 
 }
 
 // Hàm tải xuống file
-int download_file(DBConnection *db, int sender_id, const char *file_name, char *file_path, size_t path_size)
+int download_file(DBConnection *db, int sender_id, const char *file_name, char *file_content)
 {
     char query[BUFFER_SIZE];
+    char buffer[BUFFER_SIZE];
+    char file_path[BUFFER_SIZE];
     snprintf(query,
              sizeof(query),
              "SELECT file_path FROM files WHERE file_name='%s' AND (receiver_id=%d OR group_id IN (SELECT group_id FROM group_members WHERE user_id=%d))",
@@ -169,19 +172,38 @@ int download_file(DBConnection *db, int sender_id, const char *file_name, char *
     MYSQL_RES *res = execute_query(db, query);
     if (res == NULL)
     {
-        strncpy(file_path, "File not found.\n", path_size);
+        strcpy(file_path, "File not found.\n");
         return -1;
     }
     MYSQL_ROW row = mysql_fetch_row(res);
     if (row == NULL)
     {
-        strncpy(file_path, "File not found.\n", path_size);
+        strcpy(file_path, "File not found.\n");
         mysql_free_result(res);
         return -1;
     }
-    strncpy(file_path, row[0], path_size - 1);
-    file_path[path_size - 1] = '\0';
+    strcpy(file_path, row[0]);
+
+    // Mở file để đọc dữ liệu
+    FILE *fp = fopen(file_path, "rb");
+    if (!fp)
+    {
+        printf("Không thể mở file %s để tải lên.\n", file_path);
+        return -1;
+    }
+
     mysql_free_result(res);
+
+    size_t bytesRead;
+    int offset = 0;
+    // Đọc dữ liệu file vào buffer
+    while ((bytesRead = fread(buffer + offset, 1, sizeof(buffer) - offset, fp)) > 0)
+    {
+        offset += bytesRead;
+    }
+    fclose(fp);
+
+    strcpy(file_content, buffer);
 
     return 0;
 }
@@ -205,7 +227,7 @@ int search_files(DBConnection *db, const char *query_str, char *result, size_t r
     size_t offset = 0;
     while ((row = mysql_fetch_row(res)) != NULL)
     {
-        offset += snprintf(result + offset, result_size - offset, "%s\n", row[0]);
+        offset += snprintf(result + offset, result_size - offset, "%s:", row[0]);
         if (offset >= result_size)
             break;
     }

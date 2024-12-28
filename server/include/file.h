@@ -9,7 +9,7 @@
 int upload_file(DBConnection *db, int sender_id, const char *receiver_username, const char *file_name, const char *file_type, const char *file_content, int file_size, int is_group);
 
 // Hàm tải xuống file
-int download_file(DBConnection *db, int sender_id, const char *file_name, char *file_path, size_t path_size);
+int download_file(DBConnection *db, int sender_id, const char *file_name, char *file_content);
 
 // Hàm tìm kiếm file
 int search_files(DBConnection *db, const char *query, char *result, size_t result_size);

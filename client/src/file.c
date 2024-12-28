@@ -67,19 +67,63 @@ void upload_file(int sock, const char *file_path, const char *receiver, bool is_
 void download_file(int sock, const char *file_name, const char *save_path)
 {
     char buffer[BUFFER_SIZE];
-    snprintf(buffer, sizeof(buffer), "DOWNLOAD %s", file_name);
+    snprintf(buffer, sizeof(buffer), "DOWNLOAD %s %s", file_name, save_path);
     send(sock, buffer, strlen(buffer), 0);
 
-    // Nhận kích thước file
-    uint64_t filesize_net;
-    if (recv_all(sock, &filesize_net, sizeof(filesize_net)) <= 0)
-    {
-        printf("Lỗi khi nhận kích thước file.\n");
-        return;
-    }
-    uint64_t filesize = ntohll(filesize_net);
+    // // Nhận phản hồi từ server
+    // char response[BUFFER_SIZE];
+    // ssize_t bytesReceived = recv(sock, response, sizeof(response) - 1, 0);
 
-    // Nhận nội dung file
+    // if (bytesReceived > 0)
+    // {
+    //     response[bytesReceived] = '\0';
+    //     // Loại bỏ ký tự dòng mới nếu có
+    //     response[strcspn(response, "\n")] = 0;
+    //     printf("Server: %s\n", response);
+
+    //     // Nếu server báo lỗi hoặc file không tồn tại
+    //     if (strncmp(response, "ERROR", 5) == 0)
+    //     {
+    //         printf("Lỗi từ server: %s\n", response);
+    //         return;
+    //     }
+
+    //     // Nhận nội dung file
+    //     FILE *fp = fopen(save_path, "wb");
+    //     if (!fp)
+    //     {
+    //         printf("Không thể tạo file %s để lưu.\n", save_path);
+    //         return;
+    //     }
+
+    //     printf("hi\n");
+    //     // Vòng lặp nhận và ghi dữ liệu vào file
+    //     ssize_t bytes;
+    //     while ((bytes = recv(sock, buffer, sizeof(buffer), 0)) > 0)
+    //     {
+    //         fwrite(buffer, 1, bytes, fp);
+    //     }
+
+    //     if (bytes < 0)
+    //     {
+    //         printf("Lỗi khi nhận dữ liệu từ server.\n");
+    //     }
+    //     else
+    //     {
+    //         printf("Đã tải xuống file %s thành công.\n", file_name);
+    //     }
+
+    //     fclose(fp);
+    // }
+    // else
+    // {
+    //     printf("Không nhận được phản hồi từ server.\n");
+    // }
+}
+
+void save_file(const char *file_content, const char *save_path)
+{
+    // Mở file để ghi dữ liệu (chế độ ghi nhị phân)
     FILE *fp = fopen(save_path, "wb");
     if (!fp)
     {
@@ -87,23 +131,20 @@ void download_file(int sock, const char *file_name, const char *save_path)
         return;
     }
 
-    char file_buffer[BUFFER_SIZE];
-    uint64_t totalReceived = 0;
-    while (totalReceived < filesize)
+    // Ghi nội dung file vào file
+    size_t content_length = strlen(file_content); // Tính độ dài nội dung
+    size_t bytes_written = fwrite(file_content, sizeof(char), content_length, fp);
+    if (bytes_written < content_length)
     {
-        size_t bytesToReceive = (filesize - totalReceived) < BUFFER_SIZE ? (filesize - totalReceived) : BUFFER_SIZE;
-        ssize_t bytesReceived = recv_all(sock, file_buffer, bytesToReceive);
-        if (bytesReceived <= 0)
-        {
-            printf("Lỗi khi nhận dữ liệu file.\n");
-            fclose(fp);
-            return;
-        }
-        fwrite(file_buffer, 1, bytesReceived, fp);
-        totalReceived += bytesReceived;
+        printf("Đã xảy ra lỗi khi ghi file %s.\n", save_path);
+        fclose(fp);
+        return;
     }
+
+    printf("File đã được lưu thành công tại %s.\n", save_path);
+
+    // Đóng file
     fclose(fp);
-    printf("Đã tải xuống file %s thành công.\n", file_name);
 }
 
 void search_files(int sock, const char *query)
@@ -114,21 +155,6 @@ void search_files(int sock, const char *query)
 
     // Nhận kết quả tìm kiếm
     printf("Kết quả tìm kiếm:\n");
-    while (1)
-    {
-        memset(buffer, 0, sizeof(buffer));
-        ssize_t bytesReceived = recv(sock, buffer, sizeof(buffer) - 1, 0);
-        if (bytesReceived <= 0)
-        {
-            break;
-        }
-        buffer[bytesReceived] = '\0';
-        if (strcmp(buffer, "END_OF_RESULTS") == 0)
-        {
-            break;
-        }
-        printf("%s\n", buffer);
-    }
 }
 
 void upload_directory(int sock, const char *dir_path, const char *receiver, bool is_group)

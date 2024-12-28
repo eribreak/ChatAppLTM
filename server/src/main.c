@@ -309,8 +309,7 @@ void *handle_client(int client_index)
         char search_results[BUFFER_SIZE];
         if (search_files(&db, query_str, search_results, sizeof(search_results)) == 0)
         {
-            send(client->sock, search_results, strlen(search_results), 0);
-            send_response(client->sock, "END_OF_RESULTS\n");
+            send_response(client->sock, search_results);
         }
         else
         {
@@ -378,79 +377,106 @@ void *handle_client(int client_index)
         // Giả sử bạn lưu file vào thư mục và cần sử dụng file size để kiểm tra khi lưu
         if (upload_file(&db, client->id, receiver_username, file_name, file_type, file_content, filesize, 0) == 0)
         { // is_group = 0
-            send_response(client->sock, "UploadSuccess");
+            send_response(client->sock, "UploadPrivateSuccess");
         }
         else
         {
-            send_response(client->sock, "UploadFail");
+            send_response(client->sock, "UploadPrivateFail");
         }
     }
 
-    // else if (strncmp(buffer, "UPLOAD_GROUP", 12) == 0)
-    // {
-    //     char group_name[50], file_path[BUFFER_SIZE], file_type[50], file_name[BUFFER_SIZE];
-    //     int scanned = sscanf(buffer + 13, "%49s %1023s", group_name, file_path); // Chỉ đọc group_name và file_path
-    //     if (scanned != 2)
-    //     {
-    //         send_response(client->sock, "UploadGroupFailed: Invalid format.\n");
-    //     }
-    //     else
-    //     {
-    //         // Lấy file_type từ đường dẫn
-    //         const char *ext = strrchr(file_path, '.'); // Tìm phần mở rộng file
-    //         if (ext == NULL || strlen(ext) < 2)
-    //         {
-    //             send_response(client->sock, "UploadGroupFailed: Invalid file type.\n");
-    //         }
-    //         else
-    //         {
-    //             strncpy(file_type, ext + 1, sizeof(file_type) - 1); // Bỏ dấu '.' ở đầu phần mở rộng
-    //             file_type[sizeof(file_type) - 1] = '\0';
+    else if (strncmp(buffer, "UPLOAD_GROUP", 12) == 0)
+    {
+        char receiver_username[50], file_path[BUFFER_SIZE], file_type[50], file_name[BUFFER_SIZE];
+        unsigned long long filesize;
+        char *file_content = NULL; // Khởi tạo con trỏ file_content là NULL
 
-    //             // Lấy file_name từ file_path
-    //             const char *slash = strrchr(file_path, '/'); // Tìm phần cuối cùng sau dấu '/'
-    //             if (slash == NULL)
-    //             {
-    //                 strncpy(file_name, file_path, sizeof(file_name) - 1); // Nếu không có '/', file_path chính là file_name
-    //             }
-    //             else
-    //             {
-    //                 strncpy(file_name, slash + 1, sizeof(file_name) - 1); // Bỏ dấu '/' ở đầu
-    //             }
-    //             file_name[sizeof(file_name) - 1] = '\0';
+        // Tìm vị trí của ký tự '\n' để phân tách phần lệnh và nội dung file
+        char *newline_pos = strchr(buffer, '\n');
+        if (newline_pos == NULL)
+        {
+            send_response(client->sock, "UploadGroupFailed: Invalid format.\n");
+            return NULL;
+        }
 
-    //             // Gọi hàm upload_file
-    //             if (upload_file(&db, client->id, group_name, file_name, file_type, file_path, 1) == 0) // is_group = 1
-    //             {
-    //                 send_response(client->sock, "UploadGroupSuccess");
-    //             }
-    //             else
-    //             {
-    //                 send_response(client->sock, "UploadGroupFail");
-    //             }
-    //         }
-    //     }
-    // }
-    // else if (strncmp(buffer, "DOWNLOAD", 8) == 0)
-    // {
-    //     char file_name[BUFFER_SIZE];
-    //     int scanned = sscanf(buffer + 9, "%1023s", file_name);
-    //     if (scanned != 1)
-    //     {
-    //         send_response(client->sock, "DownloadFailed: Invalid format.\n");
-    //     }
-    //     else
-    //     {
-    //         if (handle_download(&db, client->sock, client->id, file_name) == 0)
-    //         {
-    //             send_response(client->sock, "DownloadSuccess");
-    //         }
-    //         else
-    //         {
-    //             send_response(client->sock, "DownloadFail");
-    //         }
-    //     }
-    // }
+        // Tách phần lệnh và nội dung file
+        *newline_pos = '\0';            // Kết thúc phần lệnh
+        file_content = newline_pos + 1; // Phần còn lại là nội dung file
+
+        // Kiểm tra nếu file_content có dữ liệu hợp lệ
+        if (file_content == NULL || strlen(file_content) == 0)
+        {
+            send_response(client->sock, "UploadGroupFailed: Missing file content.\n");
+            return NULL;
+        }
+
+        // Phân tích phần lệnh để lấy receiver_username và file_path
+        int scanned = sscanf(buffer + 13, "%49s %llu %1023s", receiver_username, &filesize, file_path); // Chỉ đọc username và file_path
+        if (scanned != 3)
+        {
+            send_response(client->sock, "UploadGroupFailed: Invalid format.\n");
+            return NULL;
+        }
+
+        // Lấy file_type từ đường dẫn
+        const char *ext = strrchr(file_path, '.'); // Tìm phần mở rộng file
+        if (ext == NULL || strlen(ext) < 2)
+        {
+            send_response(client->sock, "UploadGroupFailed: Invalid file type.\n");
+            return NULL;
+        }
+        else
+        {
+            strncpy(file_type, ext + 1, sizeof(file_type) - 1); // Bỏ dấu '.' ở đầu phần mở rộng
+            file_type[sizeof(file_type) - 1] = '\0';
+        }
+
+        // Lấy file_name từ file_path
+        const char *slash = strrchr(file_path, '/'); // Tìm phần cuối cùng sau dấu '/'
+        if (slash == NULL)
+        {
+            strncpy(file_name, file_path, sizeof(file_name) - 1); // Nếu không có '/', file_path chính là file_name
+        }
+        else
+        {
+            strncpy(file_name, slash + 1, sizeof(file_name) - 1); // Bỏ dấu '/' ở đầu
+        }
+        file_name[sizeof(file_name) - 1] = '\0';
+        printf("%s\n", file_path);
+        // Giả sử bạn lưu file vào thư mục và cần sử dụng file size để kiểm tra khi lưu
+        if (upload_file(&db, client->id, receiver_username, file_name, file_type, file_content, filesize, 1) == 0)
+        { // is_group = 0
+            send_response(client->sock, "UploadGroupSuccess");
+        }
+        else
+        {
+            send_response(client->sock, "UploadGroupFail");
+        }
+    }
+    else if (strncmp(buffer, "DOWNLOAD", 8) == 0)
+    {
+        char file_name[BUFFER_SIZE];
+        char save_path[BUFFER_SIZE];
+        char file_content[BUFFER_SIZE];
+        char response[BUFFER_SIZE];
+        int scanned = sscanf(buffer + 9, "%1023s %1023s", file_name, save_path);
+        if (scanned != 2)
+        {
+            send_response(client->sock, "DownloadFailed: Invalid format.\n");
+        }
+        else
+        {
+            if (download_file(&db, client->id, file_name, file_content) == 0)
+            {
+                snprintf(response, sizeof(response), "DownloadSuccess %s %s", save_path, file_content);
+                send_response(client->sock, response);
+            }
+            else
+            {
+                send_response(client->sock, "DownloadFail");
+            }
+        }
+    }
     return NULL;
 }
 

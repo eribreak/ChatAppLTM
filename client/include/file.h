@@ -14,6 +14,9 @@ void upload_file(int sock, const char *file_path, const char *receiver, bool is_
 // Hàm tải xuống file
 void download_file(int sock, const char *file_name, const char *save_path);
 
+// Hamf luu file
+void save_file(const char *file_content, const char *save_path);
+
 // Hàm tìm kiếm file
 void search_files(int sock, const char *query);
 
