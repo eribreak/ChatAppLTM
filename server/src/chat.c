@@ -43,8 +43,6 @@ void handle_private_message(DBConnection *db, int sender_id, const char *recipie
     // TODO: Gửi tin nhắn tới người nhận nếu họ đang online
     // Bạn cần triển khai cơ chế quản lý các kết nối đang online để tìm socket của người nhận
     // Ví dụ: bạn có thể sử dụng một danh sách các client đang kết nối và tìm socket dựa trên user_id
-
-    send_response(client_sock, "Message sent successfully.\n");
 }
 
 void send_message_to_user(int recipient_sock, const char *message)
