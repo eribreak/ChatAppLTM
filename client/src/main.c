@@ -139,7 +139,7 @@ void send_group_message_gtk(GtkWidget *button __attribute__((unused)), gpointer 
     GtkTextBuffer *text_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(chat_text_view));
     GtkTextIter end;
     gtk_text_buffer_get_end_iter(text_buffer, &end);
-    gtk_text_buffer_insert(text_buffer, &end, "Me (to group): ", -1);
+    gtk_text_buffer_insert(text_buffer, &end, "\nMe (to group): ", -1);
     gtk_text_buffer_insert(text_buffer, &end, message, -1);
     gtk_text_buffer_insert(text_buffer, &end, "\n", -1);
 
@@ -206,8 +206,9 @@ void open_group_chat_window(const char *group_name)
     GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
     gtk_container_add(GTK_CONTAINER(window), vbox);
 
-    GtkWidget *chat_text_view = gtk_text_view_new();
+    chat_text_view = gtk_text_view_new();
     gtk_text_view_set_editable(GTK_TEXT_VIEW(chat_text_view), FALSE);
+    chat_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(chat_text_view));
     GtkWidget *scroll = gtk_scrolled_window_new(NULL, NULL);
     gtk_container_add(GTK_CONTAINER(scroll), chat_text_view);
     gtk_box_pack_start(GTK_BOX(vbox), scroll, TRUE, TRUE, 0);
@@ -230,6 +231,9 @@ void open_group_chat_window(const char *group_name)
     g_signal_connect(send_button, "clicked", G_CALLBACK(send_group_message_gtk), widgets);
 
     gtk_widget_show_all(window);
+
+    pthread_t thread_id;
+    pthread_create(&thread_id, NULL, &receive_chat_messages, NULL);
 }
 
 void on_user_chat_selected(GtkWidget *widget __attribute__((unused)), gpointer user_data)

@@ -427,7 +427,7 @@ int send_group_message(DBConnection *db, Client *client, const char *group_name,
             if (clients[i] != NULL && clients[i]->id == member_id)
             {
                 char response[BUFFER_SIZE];
-                snprintf(response, sizeof(response), "MESSAGE %s: %s", client->username, message);
+                snprintf(response, sizeof(response), "MESSAGE: %s: %s", client->username, message);
                 send_response(clients[i]->sock, response);
             }
         }

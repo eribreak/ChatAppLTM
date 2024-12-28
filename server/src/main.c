@@ -268,11 +268,7 @@ void *handle_client(int client_index)
         {
             send_response(client->sock, "GroupMessageFailed: Invalid format.\n");
         }
-        if (send_group_message(&db, client, group_name, message, clients) == 0)
-        {
-            send_response(client->sock, "GroupMessageSent\n");
-        }
-        else
+        if (send_group_message(&db, client, group_name, message, clients) != 0)
         {
             send_response(client->sock, "GroupMessageFailed\n");
         }
