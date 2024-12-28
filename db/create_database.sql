@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS files (
     group_id INT DEFAULT NULL,
     file_name VARCHAR(255) NOT NULL,
     file_type VARCHAR(50),
-    file_path VARCHAR(255) NOT NULL,
+    file_path VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE,
