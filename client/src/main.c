@@ -1,582 +1,481 @@
-// client/src/main.c
-
-#include "../include/chat.h"
-#include "../include/group.h"
-#include "../include/file.h"
-#include "../include/utils.h"
-#include <stdio.h>
-#include <stdlib.h>
+#include <gtk/gtk.h>
+#include "chat.h"
+#include "group.h"
+#include "file.h"
+#include "utils.h"
 #include <string.h>
-#include <pthread.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
+#include <stdlib.h>
 #include <unistd.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <stdio.h>
 
-#define SERVER_IP "127.0.0.1"
-#define BUFFER_SIZE 1024
-#define MESSAGE_BUFFER 1024
-#define USERNAME_BUFFER 254
-#define PORT 8083
 
-int main()
-{
-    char username[50];
-    char password[50];
-    char email[100];
-    int choice;
+int sock;
+GtkWidget *main_window;
+GtkWidget *username_entry;
+GtkWidget *password_entry;
+GtkWidget *email_entry;
+char current_username[50] = ""; // Biến toàn cục lưu username
 
-    printf("==== Đăng Ký / Đăng Nhập ====\n");
-    printf("1. Đăng ký\n2. Đăng nhập\nLựa chọn: ");
-    if (scanf("%d", &choice) != 1)
-    {
-        printf("Lựa chọn không hợp lệ.\n");
-        exit(EXIT_FAILURE);
-    }
-    getchar(); // Xóa ký tự newline
 
-    // Kết nối đến server để đăng ký hoặc đăng nhập
-    int sock;
-    struct sockaddr_in server_address;
-    sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0)
-    {
-        handle_error("Không thể tạo socket");
+// Forward declaration of functions
+void create_main_menu();
+void show_user_list(GtkWidget *widget, gpointer data);
+void show_group_list(GtkWidget *widget, gpointer data);
+void on_file_sharing_button_clicked(GtkWidget *widget, gpointer data);
+
+
+int connect_to_server(const char *ip, int port) {
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+        perror("Socket creation failed");
+        return -1;
     }
 
-    server_address.sin_family = AF_INET;
-    server_address.sin_port = htons(PORT);
-    if (inet_pton(AF_INET, SERVER_IP, &server_address.sin_addr) <= 0)
-    {
-        handle_error("Địa chỉ IP không hợp lệ");
-    }
 
-    if (connect(sock, (struct sockaddr *)&server_address, sizeof(server_address)) < 0)
-    {
-        handle_error("Kết nối đến server thất bại");
-    }
+    struct sockaddr_in server_addr;
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(port);
 
-    if (choice == 1)
-    {
-        // Đăng ký
-        printf("Nhập tên người dùng: ");
-        if (fgets(username, sizeof(username), stdin) == NULL)
-        {
-            printf("Đọc tên người dùng thất bại.\n");
-            close(sock);
-            exit(EXIT_FAILURE);
-        }
-        username[strcspn(username, "\n")] = 0;
 
-        printf("Nhập mật khẩu: ");
-        if (fgets(password, sizeof(password), stdin) == NULL)
-        {
-            printf("Đọc mật khẩu thất bại.\n");
-            close(sock);
-            exit(EXIT_FAILURE);
-        }
-        password[strcspn(password, "\n")] = 0;
-
-        printf("Nhập email: ");
-        if (fgets(email, sizeof(email), stdin) == NULL)
-        {
-            printf("Đọc email thất bại.\n");
-            close(sock);
-            exit(EXIT_FAILURE);
-        }
-        email[strcspn(email, "\n")] = 0;
-
-        // Gửi yêu cầu đăng ký đến server
-        char register_buffer[BUFFER_SIZE];
-        snprintf(register_buffer, sizeof(register_buffer), "REGISTER %s %s %s", username, password, email);
-        if (send(sock, register_buffer, strlen(register_buffer), 0) < 0)
-        {
-            handle_error("Gửi yêu cầu đăng ký thất bại");
-        }
-
-        // Nhận phản hồi từ server
-        char response[BUFFER_SIZE];
-        ssize_t bytesReceived = recv(sock, response, sizeof(response) - 1, 0);
-        if (bytesReceived > 0)
-        {
-            response[bytesReceived] = '\0';
-            // Loại bỏ ký tự dòng mới nếu có
-            response[strcspn(response, "\n")] = 0;
-            printf("Server: %s\n", response);
-            if (strcmp(response, "RegisterSuccess") == 0)
-            {
-                printf("Đăng ký thành công! Bạn có thể đăng nhập ngay.\n");
-            }
-            else
-            {
-                printf("Đăng ký thất bại: %s\n", response);
-                close(sock);
-                exit(0);
-            }
-        }
-        else
-        {
-            printf("Không nhận được phản hồi từ server.\n");
-            close(sock);
-            exit(EXIT_FAILURE);
-        }
-    }
-    else if (choice == 2)
-    {
-        // Đăng nhập
-        printf("Nhập tên người dùng: ");
-        if (fgets(username, sizeof(username), stdin) == NULL)
-        {
-            printf("Đọc tên người dùng thất bại.\n");
-            close(sock);
-            exit(EXIT_FAILURE);
-        }
-        username[strcspn(username, "\n")] = 0;
-
-        printf("Nhập mật khẩu: ");
-        if (fgets(password, sizeof(password), stdin) == NULL)
-        {
-            printf("Đọc mật khẩu thất bại.\n");
-            close(sock);
-            exit(EXIT_FAILURE);
-        }
-        password[strcspn(password, "\n")] = 0;
-
-        // Gửi yêu cầu đăng nhập đến server
-        char login_buffer[BUFFER_SIZE];
-        snprintf(login_buffer, sizeof(login_buffer), "LOGIN %s %s", username, password);
-        if (send(sock, login_buffer, strlen(login_buffer), 0) < 0)
-        {
-            handle_error("Gửi yêu cầu đăng nhập thất bại");
-        }
-
-        // Nhận phản hồi từ server
-        char response[BUFFER_SIZE];
-        ssize_t bytesReceived = recv(sock, response, sizeof(response) - 1, 0);
-        if (bytesReceived > 0)
-        {
-            response[bytesReceived] = '\0';
-            // Loại bỏ ký tự dòng mới nếu có
-            response[strcspn(response, "\n")] = 0;
-            printf("Server: %s\n", response);
-            if (strcmp(response, "LoginSuccess") == 0)
-            {
-                printf("Đăng nhập thành công!\n");
-            }
-            else
-            {
-                printf("Đăng nhập thất bại: %s\n", response);
-                close(sock);
-                exit(0);
-            }
-        }
-        else
-        {
-            printf("Không nhận được phản hồi từ server.\n");
-            close(sock);
-            exit(EXIT_FAILURE);
-        }
-    }
-    else
-    {
-        printf("Lựa chọn không hợp lệ.\n");
+    if (inet_pton(AF_INET, ip, &server_addr.sin_addr) <= 0) {
+        perror("Invalid address");
         close(sock);
-        exit(0);
-    }
-    int main_choice;
-    while (1)
-    {
-        printf("\n==== Menu Chính ====\n");
-        printf("1. Chat 1-1\n");
-        printf("2. Chat Nhóm\n");
-        printf("3. Chia Sẻ File\n");
-        printf("4. Tìm Kiếm File\n");
-        printf("5. Thoát\n");
-        printf("Lựa chọn: ");
-        if (scanf("%d", &main_choice) != 1)
-        {
-            printf("Lựa chọn không hợp lệ.\n");
-            while (getchar() != '\n')
-                ; // Xóa bộ đệm nhập
-            continue;
-        }
-        getchar(); // Xóa ký tự newline
-
-        if (main_choice == 1)
-        {
-            // Chat 1-1
-            char recipient[USERNAME_BUFFER];
-            char message[MESSAGE_BUFFER];
-            printf("Nhập tên người dùng muốn nhắn tin: ");
-            if (fgets(recipient, sizeof(recipient), stdin) == NULL)
-            {
-                printf("Đọc tên người nhận thất bại.\n");
-                continue;
-            }
-            recipient[strcspn(recipient, "\n")] = 0;
-
-            printf("Nhập tin nhắn: ");
-            if (fgets(message, sizeof(message), stdin) == NULL)
-            {
-                printf("Đọc tin nhắn thất bại.\n");
-                continue;
-            }
-            message[strcspn(message, "\n")] = 0;
-
-            send_private_message(sock, recipient, message);
-        }
-        else if (main_choice == 2)
-        {
-            // Chat Nhóm
-            int group_choice;
-            printf("\n==== Chat Nhóm ====\n");
-            printf("1. Tạo nhóm\n");
-            printf("2. Tham gia nhóm\n");
-            printf("3. Rời nhóm\n");
-            printf("4. Gửi tin nhắn nhóm\n");
-            printf("5. Thêm thành viên vào nhóm\n");
-            printf("6. Xóa thành viên khỏi nhóm\n");
-            printf("7. Liệt kê các nhóm\n");
-            printf("8. Liệt kê người dùng\n");
-            printf("9. Quay lại Menu Chính\n");
-            printf("Lựa chọn: ");
-            if (scanf("%d", &group_choice) != 1)
-            {
-                printf("Lựa chọn không hợp lệ.\n");
-                while (getchar() != '\n')
-                    ; // Xóa bộ đệm nhập
-                continue;
-            }
-            getchar(); // Xóa ký tự newline
-
-            if (group_choice == 1)
-            {
-                char group_name[BUFFER_SIZE];
-                printf("Nhập tên nhóm: ");
-                if (fgets(group_name, sizeof(group_name), stdin) == NULL)
-                {
-                    printf("Đọc tên nhóm thất bại.\n");
-                    continue;
-                }
-                group_name[strcspn(group_name, "\n")] = 0;
-                create_group(sock, group_name);
-            }
-            else if (group_choice == 2)
-            {
-                char group_name[BUFFER_SIZE];
-                printf("Nhập tên nhóm để tham gia: ");
-                if (fgets(group_name, sizeof(group_name), stdin) == NULL)
-                {
-                    printf("Đọc tên nhóm thất bại.\n");
-                    continue;
-                }
-                group_name[strcspn(group_name, "\n")] = 0;
-                join_group(sock, group_name);
-            }
-            else if (group_choice == 3)
-            {
-                char group_name[BUFFER_SIZE];
-                printf("Nhập tên nhóm để rời: ");
-                if (fgets(group_name, sizeof(group_name), stdin) == NULL)
-                {
-                    printf("Đọc tên nhóm thất bại.\n");
-                    continue;
-                }
-                group_name[strcspn(group_name, "\n")] = 0;
-                leave_group(sock, group_name);
-            }
-            else if (group_choice == 4)
-            {
-                char group_name[BUFFER_SIZE];
-                char message[MESSAGE_BUFFER];
-                printf("Nhập tên nhóm: ");
-                if (fgets(group_name, sizeof(group_name), stdin) == NULL)
-                {
-                    printf("Đọc tên nhóm thất bại.\n");
-                    continue;
-                }
-                group_name[strcspn(group_name, "\n")] = 0;
-
-                printf("Nhập tin nhắn: ");
-                if (fgets(message, sizeof(message), stdin) == NULL)
-                {
-                    printf("Đọc tin nhắn thất bại.\n");
-                    continue;
-                }
-                message[strcspn(message, "\n")] = 0;
-
-                send_group_message(sock, group_name, message);
-            }
-            else if (group_choice == 5)
-            {
-                char group_name[BUFFER_SIZE];
-                char member_username[USERNAME_BUFFER];
-                printf("Nhập tên nhóm: ");
-                if (fgets(group_name, sizeof(group_name), stdin) == NULL)
-                {
-                    printf("Đọc tên nhóm thất bại.\n");
-                    continue;
-                }
-                group_name[strcspn(group_name, "\n")] = 0;
-
-                printf("Nhập tên người dùng cần thêm: ");
-                if (fgets(member_username, sizeof(member_username), stdin) == NULL)
-                {
-                    printf("Đọc tên người dùng thất bại.\n");
-                    continue;
-                }
-                member_username[strcspn(member_username, "\n")] = 0;
-
-                add_member(sock, group_name, member_username);
-            }
-            else if (group_choice == 6)
-            {
-                char group_name[BUFFER_SIZE];
-                char member_username[USERNAME_BUFFER];
-                printf("Nhập tên nhóm: ");
-                if (fgets(group_name, sizeof(group_name), stdin) == NULL)
-                {
-                    printf("Đọc tên nhóm thất bại.\n");
-                    continue;
-                }
-                group_name[strcspn(group_name, "\n")] = 0;
-
-                printf("Nhập tên người dùng cần xóa: ");
-                if (fgets(member_username, sizeof(member_username), stdin) == NULL)
-                {
-                    printf("Đọc tên người dùng thất bại.\n");
-                    continue;
-                }
-                member_username[strcspn(member_username, "\n")] = 0;
-
-                remove_member(sock, group_name, member_username);
-            }
-            else if (group_choice == 7)
-            {
-                list_groups(sock);
-            }
-            else if (group_choice == 8)
-            {
-                list_users(sock);
-            }
-            else if (group_choice == 9)
-            {
-                continue;
-            }
-            else
-            {
-                printf("Lựa chọn không hợp lệ.\n");
-            }
-        }
-        else if (main_choice == 3)
-        {
-            // Chia Sẻ File
-            int file_choice;
-            printf("\n==== Chia Sẻ File ====\n");
-            printf("1. Tải lên file\n");
-            printf("2. Tải xuống file\n");
-            printf("3. Tải lên thư mục\n");
-            printf("4. Tải xuống thư mục\n");
-            printf("5. Quay lại Menu Chính\n");
-            printf("Lựa chọn: ");
-            if (scanf("%d", &file_choice) != 1)
-            {
-                printf("Lựa chọn không hợp lệ.\n");
-                while (getchar() != '\n')
-                    ; // Xóa bộ đệm nhập
-                continue;
-            }
-            getchar(); // Xóa ký tự newline
-
-            if (file_choice == 1)
-            {
-                char file_path[BUFFER_SIZE];
-                char receiver[USERNAME_BUFFER];
-                int is_group;
-                printf("1. Gửi tới người dùng\n2. Gửi tới nhóm\nLựa chọn: ");
-                if (scanf("%d", &is_group) != 1)
-                {
-                    printf("Lựa chọn không hợp lệ.\n");
-                    while (getchar() != '\n')
-                        ; // Xóa bộ đệm nhập
-                    continue;
-                }
-                getchar();
-
-                printf("Nhập tên người dùng hoặc tên nhóm: ");
-                if (fgets(receiver, sizeof(receiver), stdin) == NULL)
-                {
-                    printf("Đọc tên người nhận thất bại.\n");
-                    continue;
-                }
-                receiver[strcspn(receiver, "\n")] = 0;
-
-                printf("Nhập đường dẫn file: ");
-                if (fgets(file_path, sizeof(file_path), stdin) == NULL)
-                {
-                    printf("Đọc đường dẫn file thất bại.\n");
-                    continue;
-                }
-                file_path[strcspn(file_path, "\n")] = 0;
-
-                upload_file(sock, file_path, receiver, is_group == 2);
-            }
-            else if (file_choice == 2)
-            {
-                char file_name[BUFFER_SIZE];
-                char save_path[BUFFER_SIZE];
-                printf("Nhập tên file cần tải xuống: ");
-                if (fgets(file_name, sizeof(file_name), stdin) == NULL)
-                {
-                    printf("Đọc tên file thất bại.\n");
-                    continue;
-                }
-                file_name[strcspn(file_name, "\n")] = 0;
-
-                printf("Nhập đường dẫn để lưu file: ");
-                if (fgets(save_path, sizeof(save_path), stdin) == NULL)
-                {
-                    printf("Đọc đường dẫn lưu file thất bại.\n");
-                    continue;
-                }
-                save_path[strcspn(save_path, "\n")] = 0;
-
-                download_file(sock, file_name, save_path);
-            }
-            else if (file_choice == 3)
-            {
-                char dir_path[BUFFER_SIZE];
-                char receiver[USERNAME_BUFFER];
-                int is_group;
-                printf("1. Gửi tới người dùng\n2. Gửi tới nhóm\nLựa chọn: ");
-                if (scanf("%d", &is_group) != 1)
-                {
-                    printf("Lựa chọn không hợp lệ.\n");
-                    while (getchar() != '\n')
-                        ; // Xóa bộ đệm nhập
-                    continue;
-                }
-                getchar();
-
-                printf("Nhập tên người dùng hoặc tên nhóm: ");
-                if (fgets(receiver, sizeof(receiver), stdin) == NULL)
-                {
-                    printf("Đọc tên người nhận thất bại.\n");
-                    continue;
-                }
-                receiver[strcspn(receiver, "\n")] = 0;
-
-                printf("Nhập đường dẫn thư mục: ");
-                if (fgets(dir_path, sizeof(dir_path), stdin) == NULL)
-                {
-                    printf("Đọc đường dẫn thư mục thất bại.\n");
-                    continue;
-                }
-                dir_path[strcspn(dir_path, "\n")] = 0;
-
-                upload_directory(sock, dir_path, receiver, is_group == 2);
-            }
-            else if (file_choice == 4)
-            {
-                char dir_name[BUFFER_SIZE];
-                char save_path[BUFFER_SIZE];
-                printf("Nhập tên thư mục cần tải xuống: ");
-                if (fgets(dir_name, sizeof(dir_name), stdin) == NULL)
-                {
-                    printf("Đọc tên thư mục thất bại.\n");
-                    continue;
-                }
-                dir_name[strcspn(dir_name, "\n")] = 0;
-
-                printf("Nhập đường dẫn để lưu thư mục: ");
-                if (fgets(save_path, sizeof(save_path), stdin) == NULL)
-                {
-                    printf("Đọc đường dẫn lưu thư mục thất bại.\n");
-                    continue;
-                }
-                save_path[strcspn(save_path, "\n")] = 0;
-
-                download_directory(sock, dir_name, save_path);
-            }
-            else if (file_choice == 5)
-            {
-                continue;
-            }
-            else
-            {
-                printf("Lựa chọn không hợp lệ.\n");
-            }
-        }
-        else if (main_choice == 4)
-        {
-            // Tìm Kiếm File
-            char query[BUFFER_SIZE];
-            printf("Nhập từ khóa tìm kiếm: ");
-            if (fgets(query, sizeof(query), stdin) == NULL)
-            {
-                printf("Đọc từ khóa tìm kiếm thất bại.\n");
-                continue;
-            }
-            query[strcspn(query, "\n")] = 0;
-
-            search_files(sock, query);
-        }
-        else if (main_choice == 5)
-        {
-            printf("Đang thoát...\n");
-            close(sock);
-            exit(0);
-        }
-        else
-        {
-            printf("Lựa chọn không hợp lệ.\n");
-        }
-        // Nhận phản hồi từ server
-        char response[BUFFER_SIZE];
-        ssize_t bytesReceived = recv(sock, response, sizeof(response) - 1, 0);
-
-        if (bytesReceived > 0)
-        {
-            response[bytesReceived] = '\0';
-            // Loại bỏ ký tự dòng mới nếu có
-            response[strcspn(response, "\n")] = 0;
-            printf("Server: %s\n", response);
-
-            if (strncmp(response, "DownloadSuccess", 15) == 0)
-            {
-                char save_path[BUFFER_SIZE];
-                char file_content[BUFFER_SIZE];
-
-                // Tìm vị trí dấu cách sau "DownloadSuccess "
-                const char *start = response + 16;    // Bỏ qua "DownloadSuccess "
-                char *space_pos = strchr(start, ' '); // Tìm dấu cách
-
-                if (space_pos)
-                {
-                    // Tách save_path và file_content
-                    size_t path_len = space_pos - start; // Độ dài của save_path
-                    strncpy(save_path, start, path_len); // Sao chép save_path
-                    save_path[path_len] = '\0';          // Kết thúc chuỗi
-
-                    strcpy(file_content, space_pos + 1); // Sao chép phần còn lại vào file_content
-
-                    // Lưu file
-                    printf("Đang lưu file...\n");
-                    save_file(file_content, save_path);
-                }
-                else
-                {
-                    printf("Phản hồi từ server không đúng định dạng.\n");
-                }
-            }
-        }
-        else
-        {
-            printf("Không nhận được phản hồi từ server.\n");
-            close(sock);
-            exit(EXIT_FAILURE);
-        }
+        return -1;
     }
 
-    close(sock);
+
+    if (connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Connection failed");
+        close(sock);
+        return -1;
+    }
+
+
+    return sock;
+}
+
+
+void send_message(GtkWidget *button __attribute__((unused)), gpointer data) {
+    GtkWidget **widgets = (GtkWidget **)data;
+    GtkWidget *message_entry = widgets[0];
+    GtkWidget *chat_text_view = widgets[1];
+    char *recipient = (char *)widgets[2];
+
+
+    if (!GTK_IS_ENTRY(message_entry)) {
+        g_warning("message_entry is not a GtkEntry!");
+        return;
+    }
+
+
+    const char *message = gtk_entry_get_text(GTK_ENTRY(message_entry));
+    if (strlen(message) == 0) {
+        g_warning("Empty message, not sending.");
+        return;
+    }
+
+
+    if (recipient == NULL) {
+        g_warning("Recipient is NULL, cannot send message.");
+        return;
+    }
+
+
+    char buffer[1024];
+    snprintf(buffer, sizeof(buffer), "PRIVATE %s: %s", recipient, message);
+    if (send(sock, buffer, strlen(buffer), 0) < 0) {
+        perror("Failed to send message");
+        return;
+    }
+
+
+    GtkTextBuffer *text_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(chat_text_view));
+    GtkTextIter end;
+    gtk_text_buffer_get_end_iter(text_buffer, &end);
+    gtk_text_buffer_insert(text_buffer, &end, "Me: ", -1);
+    gtk_text_buffer_insert(text_buffer, &end, message, -1);
+    gtk_text_buffer_insert(text_buffer, &end, "\n", -1);
+
+
+    gtk_entry_set_text(GTK_ENTRY(message_entry), "");
+}
+
+void send_group_message_gtk(GtkWidget *button __attribute__((unused)), gpointer data) {
+    GtkWidget **widgets = (GtkWidget **)data;
+    GtkWidget *message_entry = widgets[0];
+    GtkWidget *chat_text_view = widgets[1];
+    char *group_name = (char *)widgets[2];
+
+
+    if (!GTK_IS_ENTRY(message_entry)) {
+        g_warning("message_entry is not a GtkEntry!");
+        return;
+    }
+
+
+    const char *message = gtk_entry_get_text(GTK_ENTRY(message_entry));
+    if (strlen(message) == 0) {
+        g_warning("Empty message, not sending.");
+        return;
+    }
+
+
+    if (group_name == NULL) {
+        g_warning("Group name is NULL, cannot send message.");
+        return;
+    }
+
+
+    char buffer[1024];
+    snprintf(buffer, sizeof(buffer), "SEND %s %s", group_name, message);
+    if (send(sock, buffer, strlen(buffer), 0) < 0) {
+        perror("Failed to send group message");
+        return;
+    }
+
+
+    GtkTextBuffer *text_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(chat_text_view));
+    GtkTextIter end;
+    gtk_text_buffer_get_end_iter(text_buffer, &end);
+    gtk_text_buffer_insert(text_buffer, &end, "Me (to group): ", -1);
+    gtk_text_buffer_insert(text_buffer, &end, message, -1);
+    gtk_text_buffer_insert(text_buffer, &end, "\n", -1);
+
+
+    gtk_entry_set_text(GTK_ENTRY(message_entry), "");
+}
+
+
+void open_chat_window(const char *recipient) {
+    if (recipient == NULL) {
+        g_warning("Recipient is NULL, cannot open chat window.");
+        return;
+    }
+
+
+    GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title(GTK_WINDOW(window), recipient);
+    gtk_window_set_default_size(GTK_WINDOW(window), 400, 300);
+
+
+    GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    gtk_container_add(GTK_CONTAINER(window), vbox);
+
+
+    GtkWidget *chat_text_view = gtk_text_view_new();
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(chat_text_view), FALSE);
+    GtkWidget *scroll = gtk_scrolled_window_new(NULL, NULL);
+    gtk_container_add(GTK_CONTAINER(scroll), chat_text_view);
+    gtk_box_pack_start(GTK_BOX(vbox), scroll, TRUE, TRUE, 0);
+
+
+    GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
+
+
+    GtkWidget *message_entry = gtk_entry_new();
+    gtk_box_pack_start(GTK_BOX(hbox), message_entry, TRUE, TRUE, 0);
+
+
+    GtkWidget *send_button = gtk_button_new_with_label("Send");
+    gtk_box_pack_start(GTK_BOX(hbox), send_button, FALSE, FALSE, 0);
+
+
+    char *recipient_copy = g_strdup(recipient);
+    GtkWidget **widgets = g_malloc(sizeof(GtkWidget *) * 3);
+    widgets[0] = message_entry;
+    widgets[1] = chat_text_view;
+    widgets[2] = (GtkWidget *)recipient_copy;
+
+
+    g_signal_connect(send_button, "clicked", G_CALLBACK(send_message), widgets);
+
+
+    gtk_widget_show_all(window);
+}
+
+
+void open_group_chat_window(const char *group_name) {
+    if (group_name == NULL) {
+        g_warning("Group name is NULL, cannot open group chat window.");
+        return;
+    }
+
+
+    GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title(GTK_WINDOW(window), group_name);
+    gtk_window_set_default_size(GTK_WINDOW(window), 400, 300);
+
+
+    GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    gtk_container_add(GTK_CONTAINER(window), vbox);
+
+
+    GtkWidget *chat_text_view = gtk_text_view_new();
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(chat_text_view), FALSE);
+    GtkWidget *scroll = gtk_scrolled_window_new(NULL, NULL);
+    gtk_container_add(GTK_CONTAINER(scroll), chat_text_view);
+    gtk_box_pack_start(GTK_BOX(vbox), scroll, TRUE, TRUE, 0);
+
+
+    GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
+
+
+    GtkWidget *message_entry = gtk_entry_new();
+    gtk_box_pack_start(GTK_BOX(hbox), message_entry, TRUE, TRUE, 0);
+
+
+    GtkWidget *send_button = gtk_button_new_with_label("Send");
+    gtk_box_pack_start(GTK_BOX(hbox), send_button, FALSE, FALSE, 0);
+
+
+    char *group_name_copy = g_strdup(group_name);
+    GtkWidget **widgets = g_malloc(sizeof(GtkWidget *) * 3);
+    widgets[0] = message_entry;
+    widgets[1] = chat_text_view;
+    widgets[2] = (GtkWidget *)group_name_copy;
+
+
+    g_signal_connect(send_button, "clicked", G_CALLBACK(send_group_message_gtk), widgets);
+
+
+    gtk_widget_show_all(window);
+}
+
+
+void on_user_chat_selected(GtkWidget *widget __attribute__((unused)), gpointer user_data) {
+    const char *username = (const char *)user_data;
+    open_chat_window(username);
+    g_free(user_data);
+}
+
+
+void on_group_chat_selected(GtkWidget *widget __attribute__((unused)), gpointer group_data) {
+    const char *group_name = (const char *)group_data;
+    open_group_chat_window(group_name);
+    g_free(group_data);
+}
+
+
+void show_user_list(GtkWidget *widget __attribute__((unused)), gpointer data __attribute__((unused))) {
+    char response[1024];
+    send(sock, "LIST_USERS", strlen("LIST_USERS"), 0);
+    recv(sock, response, sizeof(response) - 1, 0);
+    response[strcspn(response, "\n")] = '\0';
+
+
+    GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title(GTK_WINDOW(window), "User List");
+    gtk_window_set_default_size(GTK_WINDOW(window), 400, 300);
+
+
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    gtk_container_add(GTK_CONTAINER(window), box);
+
+
+    char *user = strtok(response, ":");
+    while (user) {
+        if (strcmp(user, current_username) != 0) { // Bỏ qua username hiện tại
+            GtkWidget *button = gtk_button_new_with_label(user);
+            gtk_box_pack_start(GTK_BOX(box), button, FALSE, FALSE, 0);
+            g_signal_connect(button, "clicked", G_CALLBACK(on_user_chat_selected), g_strdup(user));
+        }
+        user = strtok(NULL, ":");
+    }
+
+
+    gtk_widget_show_all(window);
+}
+
+
+void show_group_list(GtkWidget *widget __attribute__((unused)), gpointer data __attribute__((unused))) {
+    char response[1024];
+    send(sock, "LIST_GROUPS", strlen("LIST_GROUPS"), 0);
+    recv(sock, response, sizeof(response) - 1, 0);
+    response[strcspn(response, "\n")] = '\0';
+
+
+    GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title(GTK_WINDOW(window), "Group List");
+    gtk_window_set_default_size(GTK_WINDOW(window), 400, 300);
+
+
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    gtk_container_add(GTK_CONTAINER(window), box);
+
+
+    char *group = strtok(response, ":");
+    while (group) {
+        GtkWidget *button = gtk_button_new_with_label(group);
+        gtk_box_pack_start(GTK_BOX(box), button, FALSE, FALSE, 0);
+        g_signal_connect(button, "clicked", G_CALLBACK(on_group_chat_selected), g_strdup(group));
+        group = strtok(NULL, ":");
+    }
+
+
+    gtk_widget_show_all(window);
+}
+
+
+void on_register_button_clicked(GtkWidget *widget __attribute__((unused)), gpointer data __attribute__((unused))) {
+    const char *username = gtk_entry_get_text(GTK_ENTRY(username_entry));
+    const char *password = gtk_entry_get_text(GTK_ENTRY(password_entry));
+    const char *email = gtk_entry_get_text(GTK_ENTRY(email_entry));
+
+
+    if (strlen(username) == 0 || strlen(password) == 0 || strlen(email) == 0) {
+        g_print("Register failed: Username, password, or email cannot be empty.\n");
+        return;
+    }
+
+
+    char buffer[1024];
+    snprintf(buffer, sizeof(buffer), "REGISTER %s %s %s", username, password, email);
+    send(sock, buffer, strlen(buffer), 0);
+
+
+    char response[1024];
+    ssize_t received = recv(sock, response, sizeof(response) - 1, 0);
+    if (received <= 0) {
+        g_print("Failed to receive response from server.\n");
+        return;
+    }
+
+
+    response[received] = '\0';
+    response[strcspn(response, "\n")] = '\0';
+
+
+    if (strcmp(response, "RegisterSuccess") == 0) {
+        g_print("Register successful.\n");
+    } else {
+        g_print("Register failed: %s\n", response);
+    }
+}
+
+
+void on_login_button_clicked(GtkWidget *widget __attribute__((unused)), gpointer data __attribute__((unused))) {
+    const char *username = gtk_entry_get_text(GTK_ENTRY(username_entry));
+    const char *password = gtk_entry_get_text(GTK_ENTRY(password_entry));
+
+
+    char buffer[1024];
+    snprintf(buffer, sizeof(buffer), "LOGIN %s %s", username, password);
+    send(sock, buffer, strlen(buffer), 0);
+
+
+    char response[1024];
+    recv(sock, response, sizeof(response) - 1, 0);
+    response[strcspn(response, "\n")] = '\0';
+
+
+    if (strcmp(response, "LoginSuccess") == 0) {
+        g_print("Login successful.\n");
+        gtk_widget_destroy(main_window);
+        strncpy(current_username, username, sizeof(current_username) - 1); // Lưu username hiện tại
+        current_username[sizeof(current_username) - 1] = '\0';
+        create_main_menu();
+    } else {
+        g_print("Login failed: %s\n", response);
+    }
+}
+
+
+void on_file_sharing_button_clicked(GtkWidget *widget __attribute__((unused)), gpointer data __attribute__((unused))) {
+    g_print("File sharing button clicked.\n");
+    search_files(sock, "*");
+}
+
+
+void create_main_menu() {
+    GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title(GTK_WINDOW(window), "Main Menu");
+
+
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    gtk_container_add(GTK_CONTAINER(window), box);
+
+
+    GtkWidget *chat_button = gtk_button_new_with_label("Chat 1-1");
+    GtkWidget *group_chat_button = gtk_button_new_with_label("Group Chat");
+    GtkWidget *file_sharing_button = gtk_button_new_with_label("File Sharing");
+
+
+    g_signal_connect(chat_button, "clicked", G_CALLBACK(show_user_list), NULL);
+    g_signal_connect(group_chat_button, "clicked", G_CALLBACK(show_group_list), NULL);
+    g_signal_connect(file_sharing_button, "clicked", G_CALLBACK(on_file_sharing_button_clicked), NULL);
+
+
+    gtk_box_pack_start(GTK_BOX(box), chat_button, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(box), group_chat_button, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(box), file_sharing_button, FALSE, FALSE, 0);
+
+
+    gtk_widget_show_all(window);
+}
+
+
+void create_login_window() {
+    main_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title(GTK_WINDOW(main_window), "Login/Register");
+
+
+    GtkWidget *grid = gtk_grid_new();
+    gtk_container_add(GTK_CONTAINER(main_window), grid);
+
+
+    GtkWidget *username_label = gtk_label_new("Username:");
+    username_entry = gtk_entry_new();
+    gtk_grid_attach(GTK_GRID(grid), username_label, 0, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), username_entry, 1, 0, 1, 1);
+
+
+    GtkWidget *password_label = gtk_label_new("Password:");
+    password_entry = gtk_entry_new();
+    gtk_entry_set_visibility(GTK_ENTRY(password_entry), FALSE);
+    gtk_grid_attach(GTK_GRID(grid), password_label, 0, 1, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), password_entry, 1, 1, 1, 1);
+
+
+    GtkWidget *email_label = gtk_label_new("Email:");
+    email_entry = gtk_entry_new();
+    gtk_grid_attach(GTK_GRID(grid), email_label, 0, 2, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), email_entry, 1, 2, 1, 1);
+
+
+    GtkWidget *login_button = gtk_button_new_with_label("Login");
+    g_signal_connect(login_button, "clicked", G_CALLBACK(on_login_button_clicked), NULL);
+    gtk_grid_attach(GTK_GRID(grid), login_button, 0, 3, 1, 1);
+
+
+    GtkWidget *register_button = gtk_button_new_with_label("Register");
+    g_signal_connect(register_button, "clicked", G_CALLBACK(on_register_button_clicked), NULL);
+    gtk_grid_attach(GTK_GRID(grid), register_button, 1, 3, 1, 1);
+
+
+    gtk_widget_show_all(main_window);
+}
+
+
+int main(int argc, char *argv[]) {
+    gtk_init(&argc, &argv);
+
+
+    sock = connect_to_server("127.0.0.1", 8083);
+    if (sock < 0) {
+        g_print("Failed to connect to server.\n");
+        return -1;
+    }
+
+
+    create_login_window();
+    gtk_main();
+
+
+     close(sock);
     return 0;
 }
+
