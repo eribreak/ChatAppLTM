@@ -118,14 +118,11 @@ void send_group_message_gtk(GtkWidget *button __attribute__((unused)), gpointer 
    GtkWidget *chat_text_view = widgets[1];
    char *group_name = (char *)widgets[2];
 
-
    if (!GTK_IS_ENTRY(message_entry))
    {
        g_warning("message_entry is not a GtkEntry!");
        return;
    }
-
-
    const char *message = gtk_entry_get_text(GTK_ENTRY(message_entry));
    if (strlen(message) == 0)
    {
@@ -133,14 +130,11 @@ void send_group_message_gtk(GtkWidget *button __attribute__((unused)), gpointer 
        return;
    }
 
-
    if (group_name == NULL)
    {
        g_warning("Group name is NULL, cannot send message.");
        return;
    }
-
-
    char buffer[1024];
    snprintf(buffer, sizeof(buffer), "SEND %s %s", group_name, message);
    if (send(sock, buffer, strlen(buffer), 0) < 0)
@@ -297,8 +291,6 @@ void on_upload_button_clicked_group(GtkWidget *widget __attribute__((unused)), g
            gtk_widget_destroy(dialog);
            return;
        }
-
-
        // Đọc nội dung file
        fseek(file, 0, SEEK_END);
        long file_size = ftell(file);
@@ -371,20 +363,12 @@ void save_file_gtk(const char *file_content, const char *save_path) {
        g_print("File content is empty. Cannot save file.\n");
        return;
    }
-
-
-
-
    // Mở file để lưu
    FILE *fp = fopen(save_path, "wb");
    if (!fp) {
        g_print("Failed to open file for saving at %s.\n", save_path);
        return;
    }
-
-
-
-
    // Ghi nội dung vào file
    size_t bytes_written = fwrite(file_content, 1, strlen(file_content), fp);
    if (bytes_written != strlen(file_content)) {
@@ -392,10 +376,6 @@ void save_file_gtk(const char *file_content, const char *save_path) {
        fclose(fp);
        return;
    }
-
-
-
-
    fclose(fp);
    g_print("File saved successfully at %s.\n", save_path);
 }
@@ -488,10 +468,6 @@ void on_download_button_clicked(GtkWidget *widget __attribute__((unused)), gpoin
                        g_print("Failed to receive file content from server.\n");
                    }
                }
-
-
-
-
                g_free(save_path);
            }
            gtk_widget_destroy(save_dialog);
@@ -504,8 +480,6 @@ void open_chat_window(const char *recipient)
    char buffer[BUFFER_SIZE];
    snprintf(buffer, sizeof(buffer), "HISTORY %s", recipient);
    send(sock, buffer, strlen(buffer), 0);
-
-
    if (recipient == NULL)
    {
        g_warning("Recipient is NULL, cannot open chat window.");
@@ -615,6 +589,8 @@ void open_group_chat_window(const char *group_name)
    GtkWidget *upload_button_group = gtk_button_new_with_label("Upload File");
    gtk_box_pack_start(GTK_BOX(hbox), upload_button_group, FALSE, FALSE, 0);
 
+   GtkWidget *download_button = gtk_button_new_with_label("Download File");
+   gtk_box_pack_start(GTK_BOX(hbox), download_button, FALSE, FALSE, 0);
 
    char *group_name_copy = g_strdup(group_name);
    GtkWidget **widgets = g_malloc(sizeof(GtkWidget *) * 3);
@@ -625,7 +601,7 @@ void open_group_chat_window(const char *group_name)
 
    g_signal_connect(send_button, "clicked", G_CALLBACK(send_group_message_gtk), widgets);
    g_signal_connect(upload_button_group, "clicked", G_CALLBACK(on_upload_button_clicked_group), widgets);
-
+   g_signal_connect(download_button, "clicked", G_CALLBACK(on_download_button_clicked), widgets);
 
    gtk_widget_show_all(window);
 
