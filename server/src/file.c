@@ -188,7 +188,7 @@ int download_file(DBConnection *db, int sender_id, const char *file_name, char *
     FILE *fp = fopen(file_path, "rb");
     if (!fp)
     {
-        printf("Không thể mở file %s để tải lên.\n", file_path);
+        printf("File not open.\n", file_path);
         return -1;
     }
 
