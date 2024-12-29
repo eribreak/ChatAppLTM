@@ -310,7 +310,10 @@ int list_user_groups(DBConnection *db, int user_id, char *groups, size_t group_s
     snprintf(query, sizeof(query),
              "SELECT group_name FROM chat_groups "
              "JOIN group_members ON chat_groups.id = group_members.group_id "
-             "WHERE group_members.user_id = 1");
+             "WHERE group_members.user_id = %d",
+             user_id);
+
+    printf("Executing query: %s\n", query);
 
     MYSQL_RES *res = execute_query(db, query);
     if (res == NULL)
@@ -319,14 +322,22 @@ int list_user_groups(DBConnection *db, int user_id, char *groups, size_t group_s
     }
 
     MYSQL_ROW row;
-    groups[0] = '\0'; // Khởi tạo chuỗi rỗng
+    groups[0] = '\0';  // Khởi tạo chuỗi rỗng
+    int has_group = 0; // Biến kiểm tra có nhóm nào không
     while ((row = mysql_fetch_row(res)) != NULL)
     {
+        has_group = 1;
         // Nối tên nhóm vào chuỗi `groups`
         strncat(groups, row[0], group_size - strlen(groups) - 1);
         strncat(groups, ":", group_size - strlen(groups) - 1);
     }
     mysql_free_result(res);
+
+    if (!has_group)
+    {
+        strncpy(groups, "NoGroups", group_size - 1); // Gửi thông báo không có nhóm
+        groups[group_size - 1] = '\0';               // Đảm bảo chuỗi null-terminated
+    }
 
     return 0; // Thành công
 }
