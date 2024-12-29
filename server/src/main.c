@@ -467,11 +467,10 @@ void *handle_client(int client_index)
     else if (strncmp(buffer, "DOWNLOAD", 8) == 0)
     {
         char file_name[BUFFER_SIZE];
-        char save_path[BUFFER_SIZE];
         char file_content[BUFFER_SIZE];
         char response[BUFFER_SIZE];
-        int scanned = sscanf(buffer + 9, "%1023s %1023s", file_name, save_path);
-        if (scanned != 2)
+        int scanned = sscanf(buffer + 9, "%1023s", file_name);
+        if (scanned != 1)
         {
             send_response(client->sock, "DownloadFailed: Invalid format.\n");
         }
@@ -479,7 +478,8 @@ void *handle_client(int client_index)
         {
             if (download_file(&db, client->id, file_name, file_content) == 0)
             {
-                snprintf(response, sizeof(response), "DownloadSuccess %s %s", save_path, file_content);
+                snprintf(response, sizeof(response), "DownloadSuccess %s", file_content);
+                printf("%s\n", response);
                 send_response(client->sock, response);
             }
             else
