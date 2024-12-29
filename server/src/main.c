@@ -282,7 +282,7 @@ void *handle_client(int client_index)
     }
     else if (strncmp(buffer, "LIST_GROUPS", 11) == 0)
     {
-        char groups[BUFFER_SIZE];
+        char groups[BUFFER_SIZE] = "";
         if (list_user_groups(&db, client->id, groups, sizeof(groups)) == 0)
         {
             send(client->sock, groups, strlen(groups), 0);
