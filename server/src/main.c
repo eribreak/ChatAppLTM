@@ -294,9 +294,19 @@ void *handle_client(int client_index)
     }
     else if (strncmp(buffer, "LIST_USERS", 10) == 0)
     {
+        char group_name[BUFFER_SIZE] = "";
         char users[BUFFER_SIZE];
-        if (list_all_users(&db, users, sizeof(users)) == 0)
+        if (strlen(buffer) > 10)
         {
+            int scanned = sscanf(buffer + 11, "%s", group_name);
+            if (scanned != 1)
+            {
+                send_response(client->sock, "ListUsersFailed: Invalid format.\n");
+            }
+        }
+        if (list_all_users(&db, users, sizeof(users), group_name) == 0)
+        {
+            printf("%s\n", users);
             send(client->sock, users, strlen(users), 0);
         }
         else

@@ -31,7 +31,7 @@ int remove_member_from_group(DBConnection *db, const char *group_name, const cha
 int list_user_groups(DBConnection *db, int user_id, char *result, size_t result_size);
 
 // Hàm liệt kê người dùng
-int list_all_users(DBConnection *db, char *result, size_t result_size);
+int list_all_users(DBConnection *db, char *result, size_t result_size, const char *group_name);
 
 // Hàm gửi tin nhắn nhóm
 int send_group_message(DBConnection *db, Client *client, const char *group_name, const char *message, Client *clients[]);
