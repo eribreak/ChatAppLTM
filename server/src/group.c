@@ -331,10 +331,28 @@ int list_user_groups(DBConnection *db, int user_id, char *groups, size_t group_s
     return 0; // Thành công
 }
 
-int list_all_users(DBConnection *db, char *result, size_t result_size)
+int list_all_users(DBConnection *db, char *result, size_t result_size, const char *group_name)
 {
     char query[BUFFER_SIZE];
-    snprintf(query, sizeof(query), "SELECT username FROM users");
+
+    // Nếu có group_name, lấy danh sách người dùng trong nhóm
+    if (group_name != NULL && strlen(group_name) > 0)
+    {
+        snprintf(query, sizeof(query),
+                 "SELECT u.username FROM users u "
+                 "JOIN group_members gm ON u.id = gm.user_id "
+                 "JOIN chat_groups cg ON gm.group_id = cg.id "
+                 "WHERE cg.group_name = '%s'",
+                 group_name);
+    }
+    else
+    {
+        // Nếu không có group_name, lấy tất cả người dùng
+        snprintf(query, sizeof(query), "SELECT username FROM users");
+    }
+
+    printf("Executing query: %s\n", query);
+
     MYSQL_RES *res = execute_query(db, query);
     if (res == NULL)
     {
@@ -354,7 +372,16 @@ int list_all_users(DBConnection *db, char *result, size_t result_size)
 
     if (offset == 0)
     {
-        strncpy(result, "Không có người dùng nào.\n", result_size);
+        strncpy(result, group_name && strlen(group_name) > 0 ? "Nhóm không có người dùng nào.\n" : "Không có người dùng nào.\n",
+                result_size);
+    }
+    else
+    {
+        // Xóa ký tự ':' cuối cùng nếu có
+        if (offset > 0 && result[offset - 1] == ':')
+        {
+            result[offset - 1] = '\0';
+        }
     }
 
     return 0;
