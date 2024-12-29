@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 4048
 
 void handle_private_message(DBConnection *db, int sender_id, const char *recipient_username, const char *message, int client_sock)
 {
@@ -53,7 +53,7 @@ void send_message_to_user(int recipient_sock, const char *message)
 void handle_get_messages(DBConnection *conn, char *username, char *recipient, int client_socket)
 {
     char query[BUFFER_SIZE];
-    char chat_history[BUFFER_SIZE] = "";
+    char chat_history[BUFFER_SIZE * 10] = "CHAT_HISTORY:";
 
     if (conn == NULL)
     {
@@ -62,10 +62,12 @@ void handle_get_messages(DBConnection *conn, char *username, char *recipient, in
         return;
     }
 
+    // Tạo câu truy vấn dựa trên người nhận (group hoặc private)
     if (recipient[0] == '#')
     {
         snprintf(query, sizeof(query),
-                 "SELECT u.username, m.message FROM messages m "
+                 "SELECT u.username, m.message "
+                 "FROM messages m "
                  "JOIN users u ON m.sender_id = u.id "
                  "WHERE m.group_id = (SELECT id FROM chat_groups WHERE group_name='%s') "
                  "ORDER BY m.created_at",
@@ -74,45 +76,47 @@ void handle_get_messages(DBConnection *conn, char *username, char *recipient, in
     else
     {
         snprintf(query, sizeof(query),
-                 "SELECT sender_id, message FROM messages WHERE "
-                 "(sender_id = (SELECT id FROM users WHERE username='%s') AND "
-                 "receiver_id = (SELECT id FROM users WHERE username='%s')) OR "
-                 "(sender_id = (SELECT id FROM users WHERE username='%s') AND "
-                 "receiver_id = (SELECT id FROM users WHERE username='%s')) "
-                 "ORDER BY created_at",
+                 "SELECT u.username, m.message "
+                 "FROM messages m "
+                 "JOIN users u ON m.sender_id = u.id "
+                 "WHERE "
+                 "(m.sender_id = (SELECT id FROM users WHERE username='%s') AND "
+                 " m.receiver_id = (SELECT id FROM users WHERE username='%s')) OR "
+                 "(m.sender_id = (SELECT id FROM users WHERE username='%s') AND "
+                 " m.receiver_id = (SELECT id FROM users WHERE username='%s')) "
+                 "ORDER BY m.created_at",
                  username, recipient, recipient, username);
     }
 
     printf("Executing query: %s\n", query);
 
-    if (mysql_query(conn, query) == 0)
+    // Thực hiện truy vấn
+    MYSQL_RES *res = execute_query(conn, query);
+    if (res == NULL)
     {
-        printf("hi\n");
-        MYSQL_RES *res = mysql_store_result(conn);
-        if (res)
-        {
-            char chat_history[BUFFER_SIZE * 10] = "CHAT_HISTORY:";
-            MYSQL_ROW row;
-            while ((row = mysql_fetch_row(res)))
-            {
-                strcat(chat_history, row[0]);
-                strcat(chat_history, ": ");
-                strcat(chat_history, row[1]);
-                strcat(chat_history, "\n");
-            }
-            mysql_free_result(res);
-            printf("%s\n", chat_history);
-            write(client_socket, chat_history, strlen(chat_history));
-        }
-        else
-        {
-            printf("Failed to store result: %s\n", mysql_error(conn));
-        }
+        send_response(client_socket, "Failed to retrieve messages.\n");
+        return;
+    }
+
+    // Đọc kết quả truy vấn
+    MYSQL_ROW row;
+    while ((row = mysql_fetch_row(res)))
+    {
+        strcat(chat_history, row[0]); // Username
+        strcat(chat_history, ": ");
+        strcat(chat_history, row[1]); // Message
+        strcat(chat_history, "\n");
+    }
+
+    if (strlen(chat_history) > strlen("CHAT_HISTORY:"))
+    {
+        write(client_socket, chat_history, strlen(chat_history));
     }
     else
     {
-        printf("Failed to get messages: %s\n", mysql_error(conn));
-        char *error_message = "CHAT_HISTORY:Failed to retrieve messages\n";
-        write(client_socket, error_message, strlen(error_message));
+        write(client_socket, "CHAT_HISTORY:No messages found.\n", strlen("CHAT_HISTORY:No messages found.\n"));
     }
+
+    // Giải phóng tài nguyên
+    mysql_free_result(res);
 }

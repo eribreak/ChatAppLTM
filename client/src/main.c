@@ -139,7 +139,7 @@ void send_group_message_gtk(GtkWidget *button __attribute__((unused)), gpointer 
     GtkTextBuffer *text_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(chat_text_view));
     GtkTextIter end;
     gtk_text_buffer_get_end_iter(text_buffer, &end);
-    gtk_text_buffer_insert(text_buffer, &end, "Me (to group): ", -1);
+    gtk_text_buffer_insert(text_buffer, &end, "\nMe (to group): ", -1);
     gtk_text_buffer_insert(text_buffer, &end, message, -1);
     gtk_text_buffer_insert(text_buffer, &end, "\n", -1);
 
@@ -208,7 +208,7 @@ void on_upload_button_clicked(GtkWidget *widget __attribute__((unused)), gpointe
 
         // Format metadata: UPLOAD_PRIVATE recipient file_size file_path
         size_t offset = snprintf(combined_data, BUFFER_SIZE, "UPLOAD_PRIVATE %s %ld %s\n", recipient, file_size, file_path);
-        
+
         // Thêm nội dung file vào sau metadata
         memcpy(combined_data + offset, file_content, file_size);
         offset += file_size;
@@ -240,6 +240,7 @@ void on_upload_button_clicked(GtkWidget *widget __attribute__((unused)), gpointe
     gtk_widget_destroy(dialog);
 }
 
+<<<<<<< HEAD
 void on_upload_button_clicked_group(GtkWidget *widget __attribute__((unused)), gpointer data)
 {
     GtkWidget **widgets = (GtkWidget **)data;
@@ -334,8 +335,14 @@ void on_upload_button_clicked_group(GtkWidget *widget __attribute__((unused)), g
 
     gtk_widget_destroy(dialog);
 }
+=======
+>>>>>>> d81211764ec1394c029e7b047e2631352ff2913a
 void open_chat_window(const char *recipient)
 {
+    char buffer[BUFFER_SIZE];
+    snprintf(buffer, sizeof(buffer), "HISTORY %s", recipient);
+    send(sock, buffer, strlen(buffer), 0);
+
     if (recipient == NULL)
     {
         g_warning("Recipient is NULL, cannot open chat window.");
@@ -365,7 +372,7 @@ void open_chat_window(const char *recipient)
     GtkWidget *send_button = gtk_button_new_with_label("Send");
     gtk_box_pack_start(GTK_BOX(hbox), send_button, FALSE, FALSE, 0);
 
-    GtkWidget *upload_button = gtk_button_new_with_label("Upload File"); 
+    GtkWidget *upload_button = gtk_button_new_with_label("Upload File");
     gtk_box_pack_start(GTK_BOX(hbox), upload_button, FALSE, FALSE, 0);
 
     GtkWidget *download_button = gtk_button_new_with_label("Upload File"); 
@@ -390,6 +397,10 @@ void open_chat_window(const char *recipient)
 
 void open_group_chat_window(const char *group_name)
 {
+    char buffer[BUFFER_SIZE];
+    snprintf(buffer, sizeof(buffer), "HISTORY #%s", group_name);
+    send(sock, buffer, strlen(buffer), 0);
+
     if (group_name == NULL)
     {
         g_warning("Group name is NULL, cannot open group chat window.");
@@ -403,8 +414,9 @@ void open_group_chat_window(const char *group_name)
     GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
     gtk_container_add(GTK_CONTAINER(window), vbox);
 
-    GtkWidget *chat_text_view = gtk_text_view_new();
+    chat_text_view = gtk_text_view_new();
     gtk_text_view_set_editable(GTK_TEXT_VIEW(chat_text_view), FALSE);
+    chat_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(chat_text_view));
     GtkWidget *scroll = gtk_scrolled_window_new(NULL, NULL);
     gtk_container_add(GTK_CONTAINER(scroll), chat_text_view);
     gtk_box_pack_start(GTK_BOX(vbox), scroll, TRUE, TRUE, 0);
@@ -431,6 +443,9 @@ void open_group_chat_window(const char *group_name)
     g_signal_connect(upload_button_group, "clicked", G_CALLBACK(on_upload_button_clicked_group), widgets);
 
     gtk_widget_show_all(window);
+
+    pthread_t thread_id;
+    pthread_create(&thread_id, NULL, &receive_chat_messages, NULL);
 }
 
 void on_user_chat_selected(GtkWidget *widget __attribute__((unused)), gpointer user_data)
@@ -639,32 +654,31 @@ void *receive_chat_messages(void *arg)
         memset(buffer, 0, BUFFER_SIZE);
         int bytes_read = recv(sock, buffer, sizeof(buffer) - 1, 0);
         printf("%s\n", buffer);
-        printf("hi\n");
 
         if (bytes_read > 0)
         {
             buffer[bytes_read] = '\0';
 
-            // if (strncmp(buffer, "CHAT_HISTORY:", 13) == 0)
-            // {
-            //     // Xử lý lịch sử trò chuyện
-            //     const char *chat_history = buffer + 13;
-            //     gtk_text_buffer_set_text(chat_buffer, chat_history, -1);
-            // }
-            // else
-            // {
-            // Phân loại tin nhắn và hiển thị
-            if (strncmp(buffer, "MESSAGE:", 8) == 0)
+            if (strncmp(buffer, "CHAT_HISTORY:", 13) == 0)
             {
-                const char message[4048];
-                strcpy(message, buffer + 9);
-                update_chat_display(message, 0); // Hiển thị tin nhắn từ người khác
+                // Xử lý lịch sử trò chuyện
+                const char *chat_history = buffer + 13;
+                gtk_text_buffer_set_text(chat_buffer, chat_history, -1);
             }
             else
             {
-                update_chat_display(buffer, 1); // Hiển thị tin nhắn của chính mình
+                // Phân loại tin nhắn và hiển thị
+                if (strncmp(buffer, "MESSAGE:", 8) == 0)
+                {
+                    const char message[4048];
+                    strcpy(message, buffer + 9);
+                    update_chat_display(message, 0); // Hiển thị tin nhắn từ người khác
+                }
+                else
+                {
+                    update_chat_display(buffer, 1); // Hiển thị tin nhắn của chính mình
+                }
             }
-            // }
         }
         else if (bytes_read == 0)
         {
