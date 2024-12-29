@@ -240,9 +240,100 @@ void on_upload_button_clicked(GtkWidget *widget __attribute__((unused)), gpointe
     gtk_widget_destroy(dialog);
 }
 
+void on_upload_button_clicked_group(GtkWidget *widget __attribute__((unused)), gpointer data)
+{
+    GtkWidget **widgets = (GtkWidget **)data;
+    const char *group_name = (const char *)widgets[2]; // Tên nhóm nhận file
 
+    // Mở hộp thoại chọn file
+    GtkWidget *dialog = gtk_file_chooser_dialog_new("Choose File",
+                                                    GTK_WINDOW(gtk_widget_get_toplevel(widget)),
+                                                    GTK_FILE_CHOOSER_ACTION_OPEN,
+                                                    "_Cancel", GTK_RESPONSE_CANCEL,
+                                                    "_Open", GTK_RESPONSE_ACCEPT,
+                                                    NULL);
 
+    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT)
+    {
+        char *file_path = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+        if (!file_path)
+        {
+            g_warning("No file selected.");
+            gtk_widget_destroy(dialog);
+            return;
+        }
 
+        FILE *file = fopen(file_path, "rb");
+        if (!file)
+        {
+            perror("Cannot open file");
+            g_free(file_path);
+            gtk_widget_destroy(dialog);
+            return;
+        }
+
+        // Đọc nội dung file
+        fseek(file, 0, SEEK_END);
+        long file_size = ftell(file);
+        fseek(file, 0, SEEK_SET);
+
+        char *file_content = malloc(file_size + 1);
+        if (!file_content)
+        {
+            perror("Memory allocation failed");
+            fclose(file);
+            g_free(file_path);
+            gtk_widget_destroy(dialog);
+            return;
+        }
+        fread(file_content, 1, file_size, file);
+        file_content[file_size] = '\0'; // Null-terminate nội dung file
+        fclose(file);
+
+        // Gửi metadata và nội dung file trong một chuỗi tổng hợp
+        char *combined_data = malloc(BUFFER_SIZE + file_size + 2);
+        if (!combined_data)
+        {
+            perror("Memory allocation failed for combined_data");
+            free(file_content);
+            g_free(file_path);
+            gtk_widget_destroy(dialog);
+            return;
+        }
+
+        // Format metadata: UPLOAD_GROUP group_name file_size file_path\nfile_content
+        size_t offset = snprintf(combined_data, BUFFER_SIZE, "UPLOAD_GROUP %s %ld .%s\n", group_name, file_size, file_path);
+
+        // Thêm nội dung file vào sau metadata
+        memcpy(combined_data + offset, file_content, file_size);
+        offset += file_size;
+        combined_data[offset] = '\0';
+
+        // Gửi dữ liệu tổng hợp qua socket
+        if (send(sock, combined_data, offset, 0) < 0)
+        {
+            perror("Failed to send combined data");
+        }
+        else
+        {
+            g_print("File and metadata uploaded successfully to group %s.\n", group_name);
+        }
+
+        // Debug log
+        g_print("Combined data sent:\n%s\n", combined_data);
+
+        // Giải phóng bộ nhớ
+        free(file_content);
+        free(combined_data);
+        g_free(file_path);
+    }
+    else
+    {
+        g_print("File upload canceled by user.\n");
+    }
+
+    gtk_widget_destroy(dialog);
+}
 void open_chat_window(const char *recipient)
 {
     if (recipient == NULL)
@@ -277,6 +368,9 @@ void open_chat_window(const char *recipient)
     GtkWidget *upload_button = gtk_button_new_with_label("Upload File"); 
     gtk_box_pack_start(GTK_BOX(hbox), upload_button, FALSE, FALSE, 0);
 
+    GtkWidget *download_button = gtk_button_new_with_label("Upload File"); 
+    gtk_box_pack_start(GTK_BOX(hbox), download_button, FALSE, FALSE, 0);
+
     char *recipient_copy = g_strdup(recipient);
     GtkWidget **widgets = g_malloc(sizeof(GtkWidget *) * 3);
     widgets[0] = message_entry;
@@ -285,6 +379,8 @@ void open_chat_window(const char *recipient)
 
     g_signal_connect(send_button, "clicked", G_CALLBACK(send_message), widgets);
     g_signal_connect(upload_button, "clicked", G_CALLBACK(on_upload_button_clicked), widgets);
+    g_signal_connect(download_button, "clicked", G_CALLBACK(on_download_button_clicked), widgets);
+
 
     gtk_widget_show_all(window);
 
@@ -322,6 +418,9 @@ void open_group_chat_window(const char *group_name)
     GtkWidget *send_button = gtk_button_new_with_label("Send");
     gtk_box_pack_start(GTK_BOX(hbox), send_button, FALSE, FALSE, 0);
 
+    GtkWidget *upload_button_group = gtk_button_new_with_label("Upload File"); 
+    gtk_box_pack_start(GTK_BOX(hbox), upload_button_group, FALSE, FALSE, 0);
+
     char *group_name_copy = g_strdup(group_name);
     GtkWidget **widgets = g_malloc(sizeof(GtkWidget *) * 3);
     widgets[0] = message_entry;
@@ -329,6 +428,7 @@ void open_group_chat_window(const char *group_name)
     widgets[2] = (GtkWidget *)group_name_copy;
 
     g_signal_connect(send_button, "clicked", G_CALLBACK(send_group_message_gtk), widgets);
+    g_signal_connect(upload_button_group, "clicked", G_CALLBACK(on_upload_button_clicked_group), widgets);
 
     gtk_widget_show_all(window);
 }
