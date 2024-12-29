@@ -12,7 +12,7 @@ int upload_file(DBConnection *db, int sender_id, const char *receiver_username, 
 int download_file(DBConnection *db, int sender_id, const char *file_name, char *file_content);
 
 // Hàm tìm kiếm file
-int search_files(DBConnection *db, const char *query, char *result, size_t result_size);
+int search_files(DBConnection *db, const char *query_str, int client_id, char *result, size_t result_size);
 
 // Hàm tải lên thư mục
 int upload_directory(DBConnection *db, int sender_id, const char *receiver_username, const char *dir_path, int is_group);
