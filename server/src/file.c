@@ -224,6 +224,8 @@ int search_files(DBConnection *db, const char *query_str, int client_id, char *r
                  client_id, client_id, query_str);
     }
 
+    printf("Query: %s\n", query);
+
     MYSQL_RES *res = execute_query(db, query);
     if (res == NULL)
     {

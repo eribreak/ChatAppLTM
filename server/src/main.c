@@ -306,15 +306,20 @@ void *handle_client(int client_index)
     }
     else if (strncmp(buffer, "SEARCH", 6) == 0)
     {
-        char query_str[BUFFER_SIZE];
-        int scanned = sscanf(buffer + 7, "%1023s", query_str);
-        if (scanned != 1)
+        char query_str[BUFFER_SIZE] = "";
+        if (strlen(buffer) > 6)
         {
-            send_response(client->sock, "SearchFailed: Invalid format.\n");
+            int scanned = sscanf(buffer + 7, "%1023s", query_str);
+            if (scanned != 1)
+            {
+                send_response(client->sock, "SearchFailed: Invalid format.\n");
+            }
         }
         char search_results[BUFFER_SIZE];
+
         if (search_files(&db, query_str, client->id, search_results, sizeof(search_results)) == 0)
         {
+            printf("%s\n", search_results);
             send_response(client->sock, search_results);
         }
         else
