@@ -240,7 +240,6 @@ void on_upload_button_clicked(GtkWidget *widget __attribute__((unused)), gpointe
     gtk_widget_destroy(dialog);
 }
 
-<<<<<<< HEAD
 void on_upload_button_clicked_group(GtkWidget *widget __attribute__((unused)), gpointer data)
 {
     GtkWidget **widgets = (GtkWidget **)data;
@@ -335,8 +334,7 @@ void on_upload_button_clicked_group(GtkWidget *widget __attribute__((unused)), g
 
     gtk_widget_destroy(dialog);
 }
-=======
->>>>>>> d81211764ec1394c029e7b047e2631352ff2913a
+
 void open_chat_window(const char *recipient)
 {
     char buffer[BUFFER_SIZE];
@@ -375,9 +373,6 @@ void open_chat_window(const char *recipient)
     GtkWidget *upload_button = gtk_button_new_with_label("Upload File");
     gtk_box_pack_start(GTK_BOX(hbox), upload_button, FALSE, FALSE, 0);
 
-    GtkWidget *download_button = gtk_button_new_with_label("Upload File"); 
-    gtk_box_pack_start(GTK_BOX(hbox), download_button, FALSE, FALSE, 0);
-
     char *recipient_copy = g_strdup(recipient);
     GtkWidget **widgets = g_malloc(sizeof(GtkWidget *) * 3);
     widgets[0] = message_entry;
@@ -386,8 +381,6 @@ void open_chat_window(const char *recipient)
 
     g_signal_connect(send_button, "clicked", G_CALLBACK(send_message), widgets);
     g_signal_connect(upload_button, "clicked", G_CALLBACK(on_upload_button_clicked), widgets);
-    g_signal_connect(download_button, "clicked", G_CALLBACK(on_download_button_clicked), widgets);
-
 
     gtk_widget_show_all(window);
 
