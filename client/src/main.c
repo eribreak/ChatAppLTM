@@ -27,6 +27,7 @@ void show_user_list(GtkWidget *widget, gpointer data);
 void show_group_list(GtkWidget *widget, gpointer data);
 void on_file_sharing_button_clicked(GtkWidget *widget, gpointer data);
 void *receive_chat_messages(void *arg);
+void on_create_group_clicked(GtkWidget *widget, gpointer data);
 
 int connect_to_server(const char *ip, int port)
 {
@@ -423,7 +424,7 @@ void open_group_chat_window(const char *group_name)
     GtkWidget *send_button = gtk_button_new_with_label("Send");
     gtk_box_pack_start(GTK_BOX(hbox), send_button, FALSE, FALSE, 0);
 
-    GtkWidget *upload_button_group = gtk_button_new_with_label("Upload File"); 
+    GtkWidget *upload_button_group = gtk_button_new_with_label("Upload File");
     gtk_box_pack_start(GTK_BOX(hbox), upload_button_group, FALSE, FALSE, 0);
 
     char *group_name_copy = g_strdup(group_name);
@@ -498,6 +499,20 @@ void show_group_list(GtkWidget *widget __attribute__((unused)), gpointer data __
     GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
     gtk_container_add(GTK_CONTAINER(window), box);
 
+    // Create a horizontal box for entry field and Create Group button
+    GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    gtk_box_pack_start(GTK_BOX(box), hbox, FALSE, FALSE, 0);
+
+    GtkWidget *entry = gtk_entry_new();
+    gtk_entry_set_placeholder_text(GTK_ENTRY(entry), "Enter group name");
+    gtk_box_pack_start(GTK_BOX(hbox), entry, TRUE, TRUE, 0);
+
+    GtkWidget *create_button = gtk_button_new_with_label("Create Group");
+    gtk_box_pack_start(GTK_BOX(hbox), create_button, FALSE, FALSE, 0);
+
+    g_signal_connect(create_button, "clicked", G_CALLBACK(on_create_group_clicked), entry);
+
+    // Display group list
     char *group = strtok(response, ":");
     while (group)
     {
@@ -508,6 +523,50 @@ void show_group_list(GtkWidget *widget __attribute__((unused)), gpointer data __
     }
 
     gtk_widget_show_all(window);
+}
+
+void on_create_group_clicked(GtkWidget *widget, gpointer data)
+{
+    GtkWidget *entry = GTK_WIDGET(data);
+    const char *name = gtk_entry_get_text(GTK_ENTRY(entry));
+
+    if (strlen(name) == 0)
+    {
+        GtkWidget *dialog = gtk_message_dialog_new(NULL, GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_WARNING, GTK_BUTTONS_OK, "Group name cannot be empty!");
+        gtk_dialog_run(GTK_DIALOG(dialog));
+        gtk_widget_destroy(dialog);
+        return;
+    }
+
+    char command[1024];
+    snprintf(command, sizeof(command), "CREATE_GROUP %s", name);
+    send(sock, command, strlen(command), 0);
+
+    char response[1024];
+    recv(sock, response, sizeof(response) - 1, 0);
+    response[strcspn(response, "\n")] = '\0';
+
+    if (strcmp(response, "GroupCreated") == 0)
+    {
+        GtkWidget *dialog = gtk_message_dialog_new(NULL, GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_INFO, GTK_BUTTONS_OK, "Group '%s' created successfully!", name);
+        gtk_dialog_run(GTK_DIALOG(dialog));
+        gtk_widget_destroy(dialog);
+
+        GtkWidget *button = gtk_button_new_with_label(name);
+        // Get the vertical box (parent of hbox)
+        GtkWidget *hbox = gtk_widget_get_parent(GTK_WIDGET(widget));
+        GtkWidget *box = gtk_widget_get_parent(GTK_WIDGET(hbox));
+
+        gtk_box_pack_start(GTK_BOX(box), button, FALSE, FALSE, 0);
+        g_signal_connect(button, "clicked", G_CALLBACK(on_group_chat_selected), g_strdup(name));
+        gtk_widget_show(button);
+    }
+    else if (strcmp(response, "CreateGroupFailed") == 0)
+    {
+        GtkWidget *dialog = gtk_message_dialog_new(NULL, GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_ERROR, GTK_BUTTONS_OK, "Failed to create group '%s'.", name);
+        gtk_dialog_run(GTK_DIALOG(dialog));
+        gtk_widget_destroy(dialog);
+    }
 }
 
 void on_register_button_clicked(GtkWidget *widget __attribute__((unused)), gpointer data __attribute__((unused)))
