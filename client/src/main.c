@@ -385,11 +385,6 @@ void on_download_button_clicked(GtkWidget *widget __attribute__((unused)), gpoin
         g_print("Server returned: %s\n", response);
         return;
     }
-    if (strncmp(response, "Không tìm thấy file nào phù hợp", 31) == 0)
-    {
-        g_print("No files found on server.\n");
-        return;
-    }
     // Hiển thị danh sách file trong popup
     GtkWidget *dialog = gtk_dialog_new_with_buttons("Select File to Download",
                                                     GTK_WINDOW(parent_window),
@@ -467,14 +462,15 @@ void on_download_button_clicked(GtkWidget *widget __attribute__((unused)), gpoin
 }
 void open_chat_window(const char *recipient)
 {
-    char buffer[BUFFER_SIZE];
-    snprintf(buffer, sizeof(buffer), "HISTORY %s", recipient);
-    send(sock, buffer, strlen(buffer), 0);
     if (recipient == NULL)
     {
         g_warning("Recipient is NULL, cannot open chat window.");
         return;
     }
+
+    char buffer[BUFFER_SIZE];
+    snprintf(buffer, sizeof(buffer), "HISTORY %s", recipient);
+    send(sock, buffer, strlen(buffer), 0);
 
     GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(window), recipient);
@@ -607,8 +603,12 @@ void on_add_member_button_clicked(GtkWidget *button, gpointer data)
 
     // Receive user list and display in new window
     char user_list[BUFFER_SIZE];
-    recv(sock, user_list, sizeof(user_list), 0);
-
+    ssize_t bytes_received = recv(sock, user_list, sizeof(user_list), 0);
+    if (bytes_received <= 0)
+    {
+        g_print("Error");
+        return;
+    }
     // Show user selection dialog
     show_user_selection_window(user_list, group_name, "ADD_MEMBER");
 }
@@ -626,7 +626,12 @@ void on_remove_member_button_clicked(GtkWidget *button, gpointer data)
 
     // Receive user list and display in new window
     char user_list[BUFFER_SIZE];
-    recv(sock, user_list, sizeof(user_list), 0);
+    ssize_t bytes_received = recv(sock, user_list, sizeof(user_list), 0);
+    if (bytes_received <= 0)
+    {
+        g_print("Error");
+        return;
+    }
 
     // Show user selection dialog
     show_user_selection_window(user_list, group_name, "REMOVE_MEMBER");
@@ -726,7 +731,12 @@ void on_user_selected(GtkWidget *button, gpointer data)
     send(sock, buffer, strlen(buffer), 0);
 
     char response[BUFFER_SIZE];
-    recv(sock, response, sizeof(response), 0);
+    ssize_t bytes_received = recv(sock, response, sizeof(response), 0);
+    if (bytes_received <= 0)
+    {
+        g_print("Error");
+        return;
+    }
 
     if (strncmp(response, "AddMemberSuccess", 16) == 0 || strncmp(response, "RemoveMemberSuccess", 19) == 0)
     {
@@ -750,6 +760,11 @@ void on_user_selected(GtkWidget *button, gpointer data)
 
 void on_user_chat_selected(GtkWidget *widget __attribute__((unused)), gpointer user_data)
 {
+    if (user_data == NULL)
+    {
+        g_warning("User data is NULL, cannot open chat window.");
+        return;
+    }
     const char *username = (const char *)user_data;
     open_chat_window(username);
     g_free(user_data);
@@ -757,6 +772,11 @@ void on_user_chat_selected(GtkWidget *widget __attribute__((unused)), gpointer u
 
 void on_group_chat_selected(GtkWidget *widget __attribute__((unused)), gpointer group_data)
 {
+    if (group_data == NULL)
+    {
+        g_warning("User data is NULL, cannot open chat window.");
+        return;
+    }
     const char *group_name = (const char *)group_data;
     open_group_chat_window(group_name);
     g_free(group_data);
@@ -766,7 +786,12 @@ void show_user_list(GtkWidget *widget __attribute__((unused)), gpointer data __a
 {
     char response[1024];
     send(sock, "LIST_USERS", strlen("LIST_USERS"), 0);
-    recv(sock, response, sizeof(response) - 1, 0);
+    ssize_t bytes_received = recv(sock, response, sizeof(response) - 1, 0);
+    if (bytes_received <= 0)
+    {
+        g_print("Error");
+        return;
+    }
     response[strcspn(response, "\n")] = '\0';
 
     GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
@@ -798,7 +823,12 @@ void show_group_list(GtkWidget *widget __attribute__((unused)), gpointer data __
 
     // Gửi yêu cầu danh sách nhóm đến server
     send(sock, "LIST_GROUPS", strlen("LIST_GROUPS"), 0);
-    recv(sock, response, sizeof(response) - 1, 0);
+    ssize_t bytes_received = recv(sock, response, sizeof(response) - 1, 0);
+    if (bytes_received <= 0)
+    {
+        g_print("Error");
+        return;
+    }
 
     // Xóa ký tự xuống dòng nếu có
     response[strcspn(response, "\n")] = '\0';
@@ -870,7 +900,12 @@ void on_create_group_clicked(GtkWidget *widget, gpointer data)
     send(sock, command, strlen(command), 0);
 
     char response[1024];
-    recv(sock, response, sizeof(response) - 1, 0);
+    ssize_t bytes_received = recv(sock, response, sizeof(response) - 1, 0);
+    if (bytes_received <= 0)
+    {
+        g_print("Error");
+        return;
+    }
     response[strcspn(response, "\n")] = '\0';
 
     if (strcmp(response, "GroupCreated") == 0)
@@ -943,7 +978,12 @@ void on_login_button_clicked(GtkWidget *widget __attribute__((unused)), gpointer
     send(sock, buffer, strlen(buffer), 0);
 
     char response[1024];
-    recv(sock, response, sizeof(response) - 1, 0);
+    ssize_t bytes_received = recv(sock, response, sizeof(response) - 1, 0);
+    if (bytes_received <= 0)
+    {
+        g_print("Error");
+        return;
+    }
     response[strcspn(response, "\n")] = '\0';
 
     if (strcmp(response, "LoginSuccess") == 0)
