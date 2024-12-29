@@ -278,7 +278,7 @@ void *handle_client(int client_index)
         char recipient[50];
         sscanf(buffer + 8, "%s", recipient);
         printf("%s\n", recipient);
-        // handle_get_messages(&db, client->username, recipient, client->sock);
+        handle_get_messages(&db, client->username, recipient, client->sock);
     }
     else if (strncmp(buffer, "LIST_GROUPS", 11) == 0)
     {
@@ -313,7 +313,7 @@ void *handle_client(int client_index)
             send_response(client->sock, "SearchFailed: Invalid format.\n");
         }
         char search_results[BUFFER_SIZE];
-        if (search_files(&db, query_str, search_results, sizeof(search_results)) == 0)
+        if (search_files(&db, query_str, client->id, search_results, sizeof(search_results)) == 0)
         {
             send_response(client->sock, search_results);
         }

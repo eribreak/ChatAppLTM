@@ -208,14 +208,22 @@ int download_file(DBConnection *db, int sender_id, const char *file_name, char *
     return 0;
 }
 
-// Hàm tìm kiếm file
-int search_files(DBConnection *db, const char *query_str, char *result, size_t result_size)
+int search_files(DBConnection *db, const char *query_str, int client_id, char *result, size_t result_size)
 {
     char query[BUFFER_SIZE];
-    snprintf(query,
-             sizeof(query),
-             "SELECT file_name FROM files WHERE file_name LIKE '%%%s%%'",
-             query_str);
+    if (query_str == NULL || strlen(query_str) == 0) // Không có điều kiện tìm kiếm
+    {
+        snprintf(query, sizeof(query),
+                 "SELECT file_name FROM files WHERE receiver_id = %d OR sender_id = %d",
+                 client_id, client_id);
+    }
+    else // Có điều kiện tìm kiếm
+    {
+        snprintf(query, sizeof(query),
+                 "SELECT file_name FROM files WHERE (receiver_id = %d OR sender_id = %d) AND file_name LIKE '%%%s%%'",
+                 client_id, client_id, query_str);
+    }
+
     MYSQL_RES *res = execute_query(db, query);
     if (res == NULL)
     {
