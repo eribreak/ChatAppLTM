@@ -220,8 +220,8 @@ int search_files(DBConnection *db, const char *query_str, int client_id, char *r
     else // Có điều kiện tìm kiếm
     {
         snprintf(query, sizeof(query),
-                 "SELECT file_name FROM files WHERE (receiver_id = %d OR sender_id = %d) AND file_name LIKE '%%%s%%'",
-                 client_id, client_id, query_str);
+                 "SELECT file_name FROM files WHERE receiver_id = %d AND file_name LIKE '%%%s%%'",
+                client_id, query_str);
     }
 
     printf("Query: %s\n", query);

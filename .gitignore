@@ -1,0 +1,3 @@
+*.o
+*server/build
+*client/build

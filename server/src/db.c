@@ -13,7 +13,7 @@ int connect_db(DBConnection *db, const char *host, const char *user, const char 
         return EXIT_FAILURE;
     }
 
-    if (mysql_real_connect(db->conn, host, user,password, dbname, 0, NULL, 0) == NULL) {
+    if (mysql_real_connect(db->conn, host, user, "123", dbname, 0, NULL, 0) == NULL) {
         fprintf(stderr, "mysql_real_connect() failed: %s\n", mysql_error(db->conn));
         mysql_close(db->conn);
         return EXIT_FAILURE;

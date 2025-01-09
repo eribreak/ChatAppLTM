@@ -33,8 +33,9 @@ void *handle_client(int client_index)
     if (bytesReceived <= 0)
     {
         printf("Client disconnected or error occurred.\n");
-        close(client->sock);
-        free(client);
+        close(clients[current_index]->sock);
+        free(clients[current_index]);
+        return NULL;
     }
     buffer[bytesReceived] = '\0';
 
@@ -43,13 +44,11 @@ void *handle_client(int client_index)
     if (strncmp(buffer, "REGISTER", 8) == 0)
     {
         char username[50], password[50], email[100];
-        // Đảm bảo rằng bạn có đủ dữ liệu trước khi sử dụng sscanf
         int scanned = sscanf(buffer + 9, "%49s %49s %99s", username, password, email);
         if (scanned != 3)
         {
             send_response(client->sock, "RegisterFailed: Invalid data format.\n");
-            close(client->sock);
-            free(client);
+            return NULL;
         }
 
         // Kiểm tra xem người dùng đã tồn tại chưa
@@ -103,8 +102,7 @@ void *handle_client(int client_index)
         if (scanned != 2)
         {
             send_response(client->sock, "LoginFailed: Invalid data format.\n");
-            close(client->sock);
-            free(client);
+            return NULL;
         }
 
         // Kiểm tra thông tin đăng nhập
@@ -135,8 +133,7 @@ void *handle_client(int client_index)
             {
                 mysql_free_result(res);
             }
-            close(client->sock);
-            free(client);
+            return NULL;
         }
     }
     else if (strncmp(buffer, "PRIVATE", 7) == 0)
@@ -147,6 +144,7 @@ void *handle_client(int client_index)
         if (scanned < 2)
         {
             send_response(client->sock, "PrivateMessageFailed: Invalid format.\n");
+            return NULL;
         }
         printf("%s %s\n", recipient, message);
         handle_private_message(&db, client->id, recipient, message, client->sock);
@@ -168,6 +166,7 @@ void *handle_client(int client_index)
         if (scanned != 1)
         {
             send_response(client->sock, "CreateGroupFailed: Invalid format.\n");
+            return NULL;
         }
         printf("%s\n", group_name);
         int group_id = create_group(&db, group_name, client->id);
@@ -188,6 +187,7 @@ void *handle_client(int client_index)
         if (scanned != 1)
         {
             send_response(client->sock, "JoinGroupFailed: Invalid format.\n");
+            return NULL;
         }
         int group_id = join_group(&db, group_name, client->id);
         if (group_id == -1)
@@ -210,6 +210,7 @@ void *handle_client(int client_index)
         if (scanned != 1)
         {
             send_response(client->sock, "LeaveGroupFailed: Invalid format.\n");
+            return NULL;
         }
         if (leave_group(&db, group_name, client->id) == 0)
         {
@@ -227,6 +228,7 @@ void *handle_client(int client_index)
         if (scanned != 2)
         {
             send_response(client->sock, "AddMemberFailed: Invalid format.\n");
+            return NULL;
         }
         int add_result = add_member_to_group(&db, group_name, member_username);
         if (add_result == 0)
@@ -249,6 +251,7 @@ void *handle_client(int client_index)
         if (scanned != 2)
         {
             send_response(client->sock, "RemoveMemberFailed: Invalid format.\n");
+            return NULL;
         }
         if (remove_member_from_group(&db, group_name, member_username) == 0)
         {
@@ -267,6 +270,7 @@ void *handle_client(int client_index)
         if (scanned < 2)
         {
             send_response(client->sock, "GroupMessageFailed: Invalid format.\n");
+            return NULL;
         }
         if (send_group_message(&db, client, group_name, message, clients) != 0)
         {
@@ -302,6 +306,7 @@ void *handle_client(int client_index)
             if (scanned != 1)
             {
                 send_response(client->sock, "ListUsersFailed: Invalid format.\n");
+                return NULL;
             }
         }
         if (list_all_users(&db, users, sizeof(users), group_name) == 0)
@@ -323,6 +328,7 @@ void *handle_client(int client_index)
             if (scanned != 1)
             {
                 send_response(client->sock, "SearchFailed: Invalid format.\n");
+                return NULL;
             }
         }
         char search_results[BUFFER_SIZE];
@@ -395,7 +401,6 @@ void *handle_client(int client_index)
         }
         file_name[sizeof(file_name) - 1] = '\0';
         printf("%s\n", file_path);
-        // Giả sử bạn lưu file vào thư mục và cần sử dụng file size để kiểm tra khi lưu
         if (upload_file(&db, client->id, receiver_username, file_name, file_type, file_content, filesize, 0) == 0)
         { // is_group = 0
             send_response(client->sock, "UploadPrivateSuccess");
@@ -483,6 +488,7 @@ void *handle_client(int client_index)
         if (scanned != 1)
         {
             send_response(client->sock, "DownloadFailed: Invalid format.\n");
+            return NULL;
         }
         else
         {
