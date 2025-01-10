@@ -1,14 +1,15 @@
-cd db
-mysql -u root -p < create_database.sql
+# Create database
+mysql -u root -p (Enter password)
+create_database.sql
 
-USE chat_app;
+Neu co dat password thi phai vao ham main() trong main.c de thay doi connect_db
 
-SHOW TABLES;
+# Run server
+cd server
+make
+./server
 
-
-SELECT * FROM messages;
-
-
+# Run client
+cd client
+make
 LD_PRELOAD=/lib/x86_64-linux-gnu/libpthread.so.0 ./client
-
-gcc -o chat_client client.c `pkg-config --cflags --libs gtk+-3.0` -pthread

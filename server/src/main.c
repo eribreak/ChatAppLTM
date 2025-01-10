@@ -34,7 +34,7 @@ void *handle_client(int client_index)
     {
         printf("Client disconnected or error occurred.\n");
         close(clients[current_index]->sock);
-        free(clients[current_index]);
+        clients[current_index] = NULL;
         return NULL;
     }
     buffer[bytesReceived] = '\0';
